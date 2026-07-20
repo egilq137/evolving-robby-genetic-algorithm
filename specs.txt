@@ -1,0 +1,313 @@
+===============================================================================
+ROBBY THE SODA-CAN-COLLECTING ROBOT — GENETIC ALGORITHM SPECIFICATION
+===============================================================================
+Source: Melanie Mitchell, "Complexity: A Guided Tour", Chapter 9.
+Purpose: evolve a control strategy ("brain") that lets Robby collect soda cans
+         on a grid, using a genetic algorithm.
+
+This file is the specification only. No implementation here.
+Sections marked [CHAPTER] are fixed by the book's text.
+Sections marked [DECISION] are NOT specified by the chapter and must be chosen
+by us before coding; a recommended default is given for each.
+
+-------------------------------------------------------------------------------
+1. THE WORLD
+-------------------------------------------------------------------------------
+[CHAPTER]
+- Grid: 10 x 10 sites (100 sites total).
+- Coordinates: (row, col), each 0..9. Robby starts every session at site (0,0).
+- A wall surrounds the entire grid boundary (the sites just outside 0..9).
+- Cans: at most one can per site.
+- At the start of each cleaning session, cans are thrown down at random:
+  each site independently contains a can with probability 0.50.
+
+[DECISION] D1 — Can on the start site (0,0)?
+  The chapter says "each site 50%" without excepting (0,0).
+  Default: (0,0) also gets a can with probability 0.50 (no special case).
+
+-------------------------------------------------------------------------------
+2. WHAT ROBBY SENSES (a "situation")
+-------------------------------------------------------------------------------
+[CHAPTER]
+- Robby senses exactly 5 sites: Current, North, South, East, West.
+- Each sensed site has one of 3 states: EMPTY, CAN, WALL.
+- A neighbor reads WALL when that neighbor is outside the 0..9 grid.
+- Robby has NO memory and NO knowledge of his (row, col) position; he reacts
+  only to the 5 states he currently senses.
+
+Direction convention (fixed by the book's example: at (0,0), North and West
+read WALL):
+  - North = row - 1   (up)
+  - South = row + 1   (down)
+  - East  = col + 1   (right)
+  - West  = col - 1   (left)
+
+Number of distinct situations = 3^5 = 243.
+
+-------------------------------------------------------------------------------
+3. ACTIONS
+-------------------------------------------------------------------------------
+[CHAPTER] 7 possible actions, encoded as integers 0..6:
+  0 = MoveNorth
+  1 = MoveSouth
+  2 = MoveEast
+  3 = MoveWest
+  4 = StayPut
+  5 = PickUp
+  6 = RandomMove   (choose one of the 4 move directions at random, then move)
+
+-------------------------------------------------------------------------------
+4. SCORING (per action)
+-------------------------------------------------------------------------------
+[CHAPTER]
+  +10  : PickUp while standing on a site that contains a can (can is removed).
+   -1  : PickUp while standing on a site with NO can.
+   -5  : Crash into a wall (attempt to move into a wall). Robby is fined and
+         bounces back into his current site (no position change).
+   0   : Any move into a valid empty/can site (no reward for moving);
+         StayPut; a successful move.
+
+Notes:
+- RandomMove picks a direction and then moves; if that direction is a wall,
+  it counts as a crash (-5) and a bounce-back, same as a directed move.
+- PickUp does not move Robby.
+
+-------------------------------------------------------------------------------
+5. A CLEANING SESSION
+-------------------------------------------------------------------------------
+[CHAPTER]
+- Place Robby at (0,0). Generate a fresh random can layout (Section 1).
+- Robby executes exactly 200 actions, chosen each step by his strategy from the
+  situation he currently senses.
+- Session score = total rewards - total fines over the 200 actions.
+
+-------------------------------------------------------------------------------
+6. FITNESS OF A STRATEGY
+-------------------------------------------------------------------------------
+[CHAPTER]
+- Fitness = average session score over 100 independent cleaning sessions, each
+  with a different random can configuration.
+- Reference points from the book: hand-designed strategy M ~= 346;
+  evolved strategy G ~= 483; approximate max ~= 500.
+
+-------------------------------------------------------------------------------
+7. STRATEGY REPRESENTATION (the genome)
+-------------------------------------------------------------------------------
+[CHAPTER]
+- A strategy = a list of 243 genes.
+- Each gene is an integer 0..6 (an action from Section 3).
+- Gene at position i is the action Robby performs when he is in situation i.
+  (Position = which situation is being asked; the stored number = the answer.)
+- The situation->position ordering is fixed and identical everywhere it is used
+  (fitness evaluation and offspring must agree on it).
+
+[DECISION] D2 — Situation-to-index encoding (the fixed ordering).
+  The chapter fixes an order but does not state the formula. We must choose one
+  and use it consistently.
+  Default: treat the 5 sensed states as a base-3 number.
+    state code: EMPTY = 0, CAN = 1, WALL = 2
+    index = ((((C)*3 + N)*3 + S)*3 + E)*3 + W)      # C,N,S,E,W in a FIXED order
+    yields index in 0..242.
+  (Any fixed bijection works; this one is simple and total.)
+
+-------------------------------------------------------------------------------
+7.1 BENCHMARK (MANUAL) STRATEGY "M"
+-------------------------------------------------------------------------------
+[CHAPTER] The author's hand-designed strategy, used as a human baseline to
+compare against the evolved strategy. In the book it averages ~346 (vs the
+evolved strategy's ~483). We implement it to reproduce that comparison.
+
+Rules, in priority order, for the current sensed situation:
+  1. If the CURRENT site contains a can        -> PickUp.
+  2. Else if any ADJACENT site (N/S/E/W) has a can -> move to that site.
+     (If multiple adjacent sites have cans, a FIXED priority picks one.)
+  3. Else                                        -> RandomMove.
+
+Implementation notes:
+  - M can be expressed either as a hand-written function of the 5 senses, OR
+    (equivalently) compiled into a 243-gene genome so it runs through the exact
+    same evaluation code path as evolved strategies (recommended, for a fair
+    apples-to-apples fitness comparison).
+  - This strategy is intentionally imperfect: it can cycle among empty sites and
+    miss some cans (it has no memory of where cans were), which is why the
+    evolved strategy can beat it.
+
+[DECISION] D9  Tie-break order when multiple adjacent sites have cans (rule 2).
+  The book just says the author "specifies" one. Default fixed priority:
+  North > South > East > West. (Any fixed order is acceptable; must be
+  deterministic so M is reproducible.)
+
+-------------------------------------------------------------------------------
+8. GENETIC ALGORITHM — MAIN LOOP
+-------------------------------------------------------------------------------
+[CHAPTER]
+Step 1. Initialize population:
+  - 200 individuals (strategies).
+  - Each individual = 243 genes, each drawn uniformly at random from 0..6.
+  - Use a pseudo-random-number generator for all random choices.
+
+Repeat for 1,000 generations:
+  Step 2. Evaluate: compute the fitness of every individual (Section 6).
+
+  Step 3. Build the next population (repeat until it holds 200 individuals):
+    (a) Select two parents from the CURRENT population using RANK-BASED
+        selection (see D4): sort by fitness, assign linear rank weights, draw
+        from the rank-weighted distribution. Parents drawn from the whole
+        population, with replacement (a strong strategy may be picked often).
+    (b) Crossover (single-point): choose a random split position; child 1 =
+        parent A genes before the split + parent B genes from the split onward;
+        child 2 = the mirror (parent B before + parent A after).
+    (c) Mutation: with a small probability, replace one or more genes in each
+        child with a fresh random integer 0..6.
+    (d) Add both children to the new population.
+
+  Step 4. The new population of 200 replaces the current one; return to Step 2.
+
+Output: the highest-fitness individual in the final generation is the evolved
+strategy (analogous to G). Optionally re-test it on many fresh sessions (the
+book uses 10,000) to confirm it generalizes.
+
+-------------------------------------------------------------------------------
+9. FIXED GA PARAMETERS
+-------------------------------------------------------------------------------
+[CHAPTER] (chosen "somewhat arbitrarily" by the author; other values also work)
+  Population size ................ 200
+  Genome length .................. 243
+  Gene range ..................... 0..6
+  Generations .................... 1,000
+  Actions per session ............ 200
+  Sessions per fitness eval ...... 100
+
+[TUNABLE] Exposed as model parameters (defaults; varied in experiments):
+  mutationRate ................... 0.005  (per-gene; see D3)
+  (Other Section 9 values above may also be surfaced as parameters to explore
+   scalability: grid size, actions per session, population size, generations.)
+
+-------------------------------------------------------------------------------
+10. DESIGN DECISIONS NOT FIXED BY THE CHAPTER
+-------------------------------------------------------------------------------
+These must be settled before/while coding. Defaults proposed; revisit as needed.
+
+[DECISION] D1  Can on start site (0,0)?            Default: yes, 50% like others.
+[DECISION] D2  Situation-to-index encoding.        Default: base-3, Section 7.
+
+[DECISION] D3  Mutation rate.   *** MODEL PARAMETER (tunable) ***
+  Chapter says only "a small probability." This is exposed as a configurable
+  MODEL PARAMETER `mutationRate` (per-gene probability), to be varied in future
+  experiments.
+  Starting default: 0.005  (= 0.5% per gene; ~1 of 243 genes mutated per child
+  on average).
+  NOTE ON UNITS: 0.005 = 0.5%, NOT 0.05%. If a much gentler rate is wanted,
+  0.0005 (= 0.05%) mutates a gene only ~once per 8 children. Chosen start = 0.005.
+  Mechanism: for each of the 243 genes in a child, with probability
+  `mutationRate` replace it with a fresh uniform random action 0..6.
+
+[DECISION] D4  Selection method under NEGATIVE fitness.   *** LOCKED: RANKING ***
+  IMPORTANT GOTCHA: early strategies have negative fitness (book: best -81,
+  worst -825). "Probability proportional to fitness" is undefined/broken when
+  fitnesses are negative. Selection must depend only on relative order, not on
+  raw fitness magnitude.
+  CHOSEN: Rank-based selection.
+    - Each generation, sort the 200 individuals by fitness (worst -> best).
+    - Assign a selection weight from rank: rank r (1 = worst .. 200 = best)
+      gets weight proportional to r (linear ranking). Best is most likely,
+      worst has the smallest nonzero chance — matching Mitchell's "higher
+      fitness -> more chance, nonzero for all."
+    - Draw parents from this rank-weighted distribution (with replacement).
+  Why ranking over tournament: no k parameter to tune (tournament's k=3..7 is
+  folklore with no principled guideline), and it makes the probabilistic
+  mapping explicit. Runtime cost is negligible — one sort of 200 items per
+  generation is a rounding error next to fitness evaluation.
+
+[DECISION] D5  Elitism.
+  The chapter does not carry the best individual forward unchanged. Default:
+  no elitism (match the book). Optionally keep the single best to stabilize.
+
+[DECISION] D6  RandomMove direction sampling.
+  Default: uniform over {North, South, East, West}.
+
+[DECISION] D7  Crossover split-point range.
+  This is NOT a different scheme from the book — it is the same single-point
+  crossover you described: for EACH mating, pick the split point at RANDOM anew.
+  D7 only pins down the one detail the book leaves open: WHICH positions the
+  random split is allowed to land on.
+  With a 243-gene string there are "gaps" 0..243 where a cut could go:
+    - split at 0   -> child 1 = all of parent B, child 2 = all of parent A
+                      (an exact copy of a parent; NO mixing).
+    - split at 243 -> same problem at the other end (exact copies).
+    - split in 1..242 -> both children are genuine A+B mixes.
+  Default: draw the split position uniformly from 1..242, so every mating
+  actually recombines. (Allowing the endpoints just wastes some matings on
+  clones; harmless but pointless.)
+
+[DECISION] D8  RNG seeding / reproducibility.
+  Default: allow an optional fixed seed so runs can be reproduced.
+
+[DECISION] D9  Tie-break for manual strategy M (multiple adjacent cans).
+  Default: fixed priority North > South > East > West (see Section 7.1).
+
+-------------------------------------------------------------------------------
+11. SUCCESS CRITERIA
+-------------------------------------------------------------------------------
+- The GA, starting from 200 random strategies, produces a best strategy whose
+  average score approaches ~480-500 within ~1,000 generations.
+- The best-fitness-vs-generation curve rises fast early (~to gen 300) then
+  improves slowly (matches book Figure 9.6).
+- Comparison: the evolved best strategy (~480-500) clearly beats the manual
+  benchmark strategy M (~346, Section 7.1) when both are scored the same way.
+- Bonus (qualitative): the evolved strategy exhibits the two discovered tricks —
+  (i) leaving a can as a marker to sweep a cluster, and
+  (ii) circling the perimeter along walls in a no-can region.
+
+-------------------------------------------------------------------------------
+12. ARCHITECTURE & DELIVERABLES
+-------------------------------------------------------------------------------
+Chosen approach: a single-language TypeScript web app that runs the GA LIVE in
+the browser, deployable on Vercel. No separate backend, no offline precompute
+step, no data handoff. Users can tweak parameters and re-run interactively.
+
+12.1 Language & runtime
+  - TypeScript (compiles to JavaScript; runs natively in the browser).
+  - Performance techniques (needed to hit ~1-3 min for a full 1,000-gen run):
+      * Store genomes, grids, and per-site state in TYPED ARRAYS (Int8Array /
+        Uint8Array), never plain objects/arrays of objects.
+      * Offload fitness evaluation to WEB WORKERS. Fitness eval is
+        embarrassingly parallel (each strategy scored independently), so split
+        the 200 individuals across N workers = ~N x speedup.
+      * Keep the inner action-loop allocation-free (reuse buffers).
+
+12.2 Suggested module boundaries
+  - core/world      : grid state, can placement (seedable RNG), sensing,
+                      action application, scoring.
+  - core/strategy   : genome type (Int8Array[243]), situation->index encoding
+                      (D2 base-3), lookup of action for a situation.
+  - core/ga         : init population, rank-based selection (D4), single-point
+                      crossover, mutation, generation loop.
+  - core/eval       : run a session (200 actions), run 100 sessions -> fitness.
+                      (This is the HOT LOOP — the isolated kernel.)
+  - ui/grid         : <canvas> animation replaying a strategy on a grid.
+  - ui/chart        : best-fitness-vs-generation live line chart.
+  - workers/        : Web Worker wrapper around core/eval for parallelism.
+
+12.3 Web app features
+  - Live grid animation (<canvas>) of a chosen strategy playing a session.
+  - Live line chart of best fitness per generation (matches book Fig 9.6 shape).
+  - Controls to start/stop a run and adjust parameters (Section 9 knobs +
+    mutation rate) to explore scalability (bigger grid, more actions, etc.).
+
+12.4 Deployment
+  - Vercel: first-class support for TS frontends (Vite or Next.js). Push to
+    git, zero/near-zero config. Everything is static + client-side compute;
+    no server functions required for the GA.
+
+12.5 Optional future upgrade path (NOT for the first build)
+  - If scaling up (larger grid, more actions/generations) hits a performance
+    ceiling, port ONLY the hot kernel (core/eval fitness loop) to Rust compiled
+    to WebAssembly for ~5-10x more headroom. The kernel is small and isolated,
+    so this is a drop-in replacement of one module; the entire TS UI, GA loop,
+    animation, and charts stay unchanged.
+  - Toolchain note: Rust->WASM is built LOCALLY or in CI (rustup + wasm32
+    target + wasm-pack + wasm-bindgen); Vercel's build image has no Rust, so the
+    prebuilt .wasm is committed/bundled and Vercel serves it as a static asset.
+  - This path is deliberately deferred to de-risk the first working build.
+===============================================================================

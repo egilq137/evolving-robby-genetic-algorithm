@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Environment / editor
+.env
+.env.local
+.DS_Store
+.vscode/
+.idea/
+
+# Claude local (machine-specific) settings
+.claude/settings.local.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# Test / coverage
+coverage/
+
+# Scratch
+scratchpad/
+
+# Copyrighted source material — do not publish
+papers/
