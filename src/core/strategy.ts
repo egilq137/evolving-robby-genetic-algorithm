@@ -17,7 +17,9 @@ import {
   MOVE_WEST,
   PICK_UP,
   RANDOM_MOVE,
+  NUM_ACTIONS,
 } from "./actions";
+import type { Rng } from "./rng";
 
 /** A strategy: Int8Array of length NUM_SITUATIONS, each entry an action 0..6. */
 export type Strategy = Int8Array;
@@ -35,6 +37,16 @@ export function actionFor(strategy: Strategy, senses: Senses): number {
 export function uniformStrategy(action: number): Strategy {
   const s = new Int8Array(NUM_SITUATIONS);
   s.fill(action);
+  return s;
+}
+
+/**
+ * A random strategy: 243 genes, each a uniformly random action 0..NUM_ACTIONS-1.
+ * This is the raw material of the GA's initial population.
+ */
+export function randomStrategy(rng: Rng): Strategy {
+  const s = new Int8Array(NUM_SITUATIONS);
+  for (let i = 0; i < s.length; i++) s[i] = Math.floor(rng() * NUM_ACTIONS);
   return s;
 }
 

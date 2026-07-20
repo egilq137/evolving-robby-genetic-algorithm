@@ -3,16 +3,13 @@
 // computeFitness, so these numbers match what the GA will later try to beat.
 
 import { makeRng } from "../core/rng";
-import { NUM_SITUATIONS } from "../core/situation";
-import { NUM_ACTIONS, STAY_PUT, MOVE_EAST, PICK_UP } from "../core/actions";
-import { uniformStrategy, manualStrategy, type Strategy } from "../core/strategy";
+import { STAY_PUT, MOVE_EAST, PICK_UP } from "../core/actions";
+import {
+  uniformStrategy,
+  manualStrategy,
+  randomStrategy,
+} from "../core/strategy";
 import { computeFitness } from "../core/eval";
-
-function randomStrategy(rng: () => number): Strategy {
-  const s = new Int8Array(NUM_SITUATIONS);
-  for (let i = 0; i < s.length; i++) s[i] = Math.floor(rng() * NUM_ACTIONS);
-  return s;
-}
 
 function render(): void {
   const rows: [string, number][] = [
