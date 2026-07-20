@@ -10,6 +10,7 @@
 
 import { NUM_ACTIONS } from "./actions";
 import { randomStrategy, type Strategy } from "./strategy";
+import { computeFitness, type FitnessOptions } from "./eval";
 import type { Rng } from "./rng";
 
 /** An initial population of `size` random strategies. */
@@ -97,4 +98,101 @@ export function mutate(strategy: Strategy, mutationRate: number, rng: Rng): void
       strategy[i] = Math.floor(rng() * NUM_ACTIONS);
     }
   }
+}
+
+// --- The generation loop -----------------------------------------------------
+
+export const DEFAULT_POPULATION_SIZE = 200;
+export const DEFAULT_MUTATION_RATE = 0.005; // spec D3
+
+/** Fitness of every individual in the population (spec step 2). */
+export function evaluatePopulation(
+  population: Strategy[],
+  rng: Rng,
+  opts?: FitnessOptions,
+): number[] {
+  return population.map((s) => computeFitness(s, rng, opts));
+}
+
+/**
+ * Build the next generation from the current one and its fitnesses (spec step 3):
+ * repeatedly pick two parents by rank, cross them over, mutate the children, and
+ * add both, until the new population is the same size as the old.
+ */
+export function nextGeneration(
+  population: Strategy[],
+  fitnesses: number[],
+  mutationRate: number,
+  rng: Rng,
+): Strategy[] {
+  const selector = makeRankSelector(fitnesses, rng);
+  const size = population.length;
+  const next: Strategy[] = [];
+  while (next.length < size) {
+    const parentA = population[selector()];
+    const parentB = population[selector()];
+    const [c1, c2] = crossover(parentA, parentB, rng);
+    mutate(c1, mutationRate, rng);
+    mutate(c2, mutationRate, rng);
+    next.push(c1);
+    if (next.length < size) next.push(c2);
+  }
+  return next;
+}
+
+export interface GAOptions extends FitnessOptions {
+  populationSize?: number;
+  mutationRate?: number;
+}
+
+export interface GenerationStats {
+  generation: number;
+  bestFitness: number;
+  averageFitness: number;
+}
+
+export interface EvolutionRun {
+  history: GenerationStats[]; // one entry per generation
+  bestStrategy: Strategy; // best individual seen across all generations
+  bestFitness: number;
+}
+
+/** Index of the maximum value in an array. */
+function argmax(xs: number[]): number {
+  let bi = 0;
+  for (let i = 1; i < xs.length; i++) if (xs[i] > xs[bi]) bi = i;
+  return bi;
+}
+
+/**
+ * Run the genetic algorithm for `generations` generations and return the
+ * best-fitness history plus the best strategy ever seen. Synchronous — for a
+ * live/animated run the caller can instead drive randomPopulation +
+ * evaluatePopulation + nextGeneration one step at a time.
+ */
+export function runGA(
+  generations: number,
+  rng: Rng,
+  opts: GAOptions = {},
+): EvolutionRun {
+  const populationSize = opts.populationSize ?? DEFAULT_POPULATION_SIZE;
+  const mutationRate = opts.mutationRate ?? DEFAULT_MUTATION_RATE;
+
+  let population = randomPopulation(populationSize, rng);
+  const history: GenerationStats[] = [];
+  let bestStrategy = population[0];
+  let bestFitness = -Infinity;
+
+  for (let g = 0; g < generations; g++) {
+    const fitnesses = evaluatePopulation(population, rng, opts);
+    const bi = argmax(fitnesses);
+    const avg = fitnesses.reduce((a, b) => a + b, 0) / fitnesses.length;
+    history.push({ generation: g, bestFitness: fitnesses[bi], averageFitness: avg });
+    if (fitnesses[bi] > bestFitness) {
+      bestFitness = fitnesses[bi];
+      bestStrategy = population[bi].slice(); // keep a copy before the pop changes
+    }
+    population = nextGeneration(population, fitnesses, mutationRate, rng);
+  }
+  return { history, bestStrategy, bestFitness };
 }

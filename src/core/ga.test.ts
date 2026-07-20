@@ -1,13 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { NUM_SITUATIONS } from "./situation";
-import { NUM_ACTIONS } from "./actions";
-import { randomStrategy, type Strategy } from "./strategy";
+import { NUM_ACTIONS, STAY_PUT, MOVE_EAST } from "./actions";
+import { randomStrategy, uniformStrategy, type Strategy } from "./strategy";
 import {
   randomPopulation,
   rankOrder,
   makeRankSelector,
   crossover,
   mutate,
+  evaluatePopulation,
+  nextGeneration,
+  runGA,
 } from "./ga";
 import { makeRng, type Rng } from "./rng";
 
@@ -195,5 +198,113 @@ describe("mutate", () => {
     mutate(a, 0.3, makeRng(5));
     mutate(b, 0.3, makeRng(5));
     expect(Array.from(a)).toEqual(Array.from(b));
+  });
+});
+
+describe("evaluatePopulation", () => {
+  it("returns one fitness per individual", () => {
+    const pop = [uniformStrategy(STAY_PUT), uniformStrategy(STAY_PUT)];
+    expect(evaluatePopulation(pop, makeRng(1), { numSessions: 5 }).length).toBe(2);
+  });
+
+  it("gives the expected fitness for each individual", () => {
+    // StayPut -> 0, MoveEast -> -955, independent of grid/rng.
+    const pop = [
+      uniformStrategy(STAY_PUT),
+      uniformStrategy(MOVE_EAST),
+      uniformStrategy(STAY_PUT),
+    ];
+    expect(evaluatePopulation(pop, makeRng(1), { numSessions: 10 })).toEqual([
+      0, -955, 0,
+    ]);
+  });
+});
+
+describe("nextGeneration", () => {
+  it("preserves population size (even and odd)", () => {
+    const pop = randomPopulation(10, makeRng(1));
+    const fit = pop.map((_, i) => i);
+    expect(nextGeneration(pop, fit, 0, makeRng(2)).length).toBe(10);
+    const pop9 = randomPopulation(9, makeRng(1));
+    expect(nextGeneration(pop9, pop9.map((_, i) => i), 0, makeRng(2)).length).toBe(9);
+  });
+
+  it("produces valid genomes (length 243, actions 0..6)", () => {
+    const pop = randomPopulation(20, makeRng(1));
+    const next = nextGeneration(pop, pop.map((_, i) => i), 0.01, makeRng(2));
+    for (const child of next) {
+      expect(child.length).toBe(NUM_SITUATIONS);
+      expect(Array.from(child).every((a) => a >= 0 && a < NUM_ACTIONS)).toBe(true);
+    }
+  });
+
+  it("with an all-identical population and no mutation, the next gen is identical", () => {
+    const pop = [0, 1, 2, 3].map(() => uniformStrategy(3)); // all MoveWest
+    const next = nextGeneration(pop, [1, 1, 1, 1], 0, makeRng(9));
+    for (const child of next) {
+      expect(Array.from(child).every((a) => a === 3)).toBe(true);
+    }
+  });
+
+  it("without mutation, invents no new genes (only parents' values appear)", () => {
+    const pop = [uniformStrategy(0), uniformStrategy(6)]; // only 0s and 6s
+    const next = nextGeneration(pop, [0, 1], 0, makeRng(3));
+    for (const child of next) {
+      expect(Array.from(child).every((a) => a === 0 || a === 6)).toBe(true);
+    }
+  });
+
+  it("applies selection pressure: the fittest parent's genes dominate", () => {
+    // Worst = all 0, best = all 6; rank selection should favor the 6s.
+    const pop = [uniformStrategy(0), uniformStrategy(3), uniformStrategy(3), uniformStrategy(6)];
+    const next = nextGeneration(pop, [0, 1, 2, 10], 0, makeRng(2024));
+    let zeros = 0;
+    let sixes = 0;
+    for (const child of next) for (const g of child) {
+      if (g === 0) zeros++;
+      else if (g === 6) sixes++;
+    }
+    expect(sixes).toBeGreaterThan(zeros);
+  });
+
+  it("is reproducible by seed", () => {
+    const pop = randomPopulation(8, makeRng(1));
+    const fit = pop.map((_, i) => i * 2);
+    const a = nextGeneration(pop, fit, 0.02, makeRng(5)).map((s) => Array.from(s));
+    const b = nextGeneration(pop, fit, 0.02, makeRng(5)).map((s) => Array.from(s));
+    expect(a).toEqual(b);
+  });
+});
+
+describe("runGA - evolution actually works", () => {
+  it("best fitness climbs from negative into positive over generations", () => {
+    // Small/short run for speed: this only needs to prove the trend is upward.
+    // The book's steep rise to M-level (~250) takes a few hundred generations.
+    const run = runGA(60, makeRng(1), {
+      populationSize: 100,
+      numSessions: 30,
+      mutationRate: 0.01,
+    });
+    const first = run.history[0].bestFitness; // ~ -32 (best of random pop)
+    const last = run.history[run.history.length - 1].bestFitness; // ~ +14
+    expect(first).toBeLessThan(0); // random strategies start bad
+    expect(last).toBeGreaterThan(first + 25); // clear upward trend
+    expect(last).toBeGreaterThan(0); // crossed into positive territory
+  });
+
+  it("bestFitness equals the max best-of-generation over the whole run", () => {
+    const run = runGA(15, makeRng(2), { populationSize: 40, numSessions: 15 });
+    const maxSeen = Math.max(...run.history.map((h) => h.bestFitness));
+    expect(run.bestFitness).toBe(maxSeen);
+    expect(run.bestStrategy.length).toBe(NUM_SITUATIONS);
+  });
+
+  it("is reproducible by seed", () => {
+    const opts = { populationSize: 30, numSessions: 10, generations: 8 } as const;
+    const a = runGA(8, makeRng(42), opts);
+    const b = runGA(8, makeRng(42), opts);
+    expect(a.history.map((h) => h.bestFitness)).toEqual(
+      b.history.map((h) => h.bestFitness),
+    );
   });
 });
