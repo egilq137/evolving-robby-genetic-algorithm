@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Robby's World — Increment 1: grid + cans</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 2rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
+        max-width: 900px;
+      }
+      h1 {
+        font-size: 1.4rem;
+        margin: 0;
+      }
+      .panels {
+        display: flex;
+        gap: 2.5rem;
+        flex-wrap: wrap;
+      }
+      .panel h2 {
+        font-size: 1rem;
+        margin: 0 0 0.5rem;
+      }
+      .panel p {
+        font-size: 0.85rem;
+        opacity: 0.75;
+        margin: 0.5rem 0 0;
+        max-width: 340px;
+      }
+      canvas {
+        border: 1px solid gray;
+        image-rendering: pixelated;
+      }
+      #stats {
+        font-family: ui-monospace, monospace;
+        font-size: 0.9rem;
+      }
+      button {
+        font-size: 0.9rem;
+        padding: 0.4rem 0.8rem;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Robby's World — Increment 1: grid + can placement</h1>
+    <button id="reroll">Re-roll (new random seed)</button>
+    <div class="panels">
+      <div class="panel">
+        <h2>One sampled 10×10 grid</h2>
+        <canvas id="grid" width="330" height="330"></canvas>
+        <p>Filled circles are cans, blank cells are empty. Each cell gets a can
+          with probability 0.5, independently.</p>
+      </div>
+      <div class="panel">
+        <h2>Per-cell can frequency over 5000 grids</h2>
+        <canvas id="heat" width="330" height="330"></canvas>
+        <p>Each cell colored by how often it held a can across 5000 fresh
+          layouts. Uniformly near 50% everywhere = the probability is per-cell,
+          not a fluke.</p>
+      </div>
+    </div>
+    <div id="stats">measuring…</div>
+    <script type="module" src="/src/viz/main.ts"></script>
+  </body>
+</html>
