@@ -8,7 +8,7 @@ import {
 } from "./actions";
 import { uniformStrategy, type Strategy } from "./strategy";
 import { encodeSituation } from "./situation";
-import { runSession, computeFitness } from "./eval";
+import { runSession, computeFitness, traceSession } from "./eval";
 import { makeRng } from "./rng";
 
 const rng = () => 0; // deterministic stand-in; unused by non-random strategies
@@ -70,6 +70,43 @@ describe("runSession - does not mutate the strategy", () => {
     const copy = Int8Array.from(strat);
     runSession(strat, placeCans(createGrid(10, 10), 0.5, makeRng(3)), rng, 200);
     expect(Array.from(strat)).toEqual(Array.from(copy));
+  });
+});
+
+describe("traceSession", () => {
+  it("records exactly numActions steps", () => {
+    const grid = placeCans(createGrid(10, 10), 0.5, makeRng(1));
+    expect(traceSession(uniformStrategy(STAY_PUT), grid, rng, 200).length).toBe(200);
+  });
+
+  it("its final cumulative score equals runSession's score (same grid & rng)", () => {
+    const strat = uniformStrategy(RANDOM_MOVE);
+    // Two identical fresh setups: one traced, one run.
+    const gA = placeCans(createGrid(10, 10), 0.5, makeRng(7));
+    const gB = placeCans(createGrid(10, 10), 0.5, makeRng(7));
+    const trace = traceSession(strat, gA, makeRng(99), 200);
+    const score = runSession(strat, gB, makeRng(99), 200);
+    expect(trace[trace.length - 1].cumulative).toBe(score);
+  });
+
+  it("cumulative is the running sum of rewards", () => {
+    const grid = placeCans(createGrid(10, 10), 0.5, makeRng(3));
+    const trace = traceSession(uniformStrategy(RANDOM_MOVE), grid, makeRng(5), 50);
+    let acc = 0;
+    for (const step of trace) {
+      acc += step.reward;
+      expect(step.cumulative).toBe(acc);
+    }
+  });
+
+  it("all-StayPut: Robby stays at (0,0) with score 0 the whole time", () => {
+    const grid = placeCans(createGrid(10, 10), 0.5, makeRng(2));
+    const trace = traceSession(uniformStrategy(STAY_PUT), grid, rng, 10);
+    for (const step of trace) {
+      expect(step.row).toBe(0);
+      expect(step.col).toBe(0);
+      expect(step.cumulative).toBe(0);
+    }
   });
 });
 

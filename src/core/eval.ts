@@ -39,6 +39,39 @@ export function runSession(
   return score;
 }
 
+/** One recorded step of a session (Robby's position is AFTER the action). */
+export interface SessionStep {
+  action: number;
+  reward: number;
+  cumulative: number; // running score through this step
+  row: number;
+  col: number;
+}
+
+/**
+ * Like runSession, but records every step so the whole session can be replayed
+ * or plotted. Robby starts at (0,0) (implicitly, before step 0). Mutates `grid`.
+ * The last step's `cumulative` equals runSession's returned score.
+ */
+export function traceSession(
+  strategy: Strategy,
+  grid: Grid,
+  rng: Rng,
+  numActions: number = DEFAULT_ACTIONS_PER_SESSION,
+): SessionStep[] {
+  const robby = { row: 0, col: 0 };
+  const steps: SessionStep[] = [];
+  let cumulative = 0;
+  for (let i = 0; i < numActions; i++) {
+    const senses = sense(grid, robby.row, robby.col);
+    const action = actionFor(strategy, senses);
+    const reward = applyAction(grid, robby, action, rng);
+    cumulative += reward;
+    steps.push({ action, reward, cumulative, row: robby.row, col: robby.col });
+  }
+  return steps;
+}
+
 export interface FitnessOptions {
   rows?: number;
   cols?: number;

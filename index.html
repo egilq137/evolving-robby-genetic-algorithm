@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Robby's World — Increment 1: grid + cans</title>
+    <title>Robby — Session Trace</title>
     <style>
       :root {
         color-scheme: light dark;
@@ -14,95 +14,140 @@
         padding: 2rem;
         display: flex;
         flex-direction: column;
-        gap: 1.5rem;
-        max-width: 900px;
+        gap: 1.25rem;
+        max-width: 960px;
       }
       h1 {
         font-size: 1.4rem;
         margin: 0;
+      }
+      h2 {
+        font-size: 1rem;
+        margin: 0 0 0.5rem;
+      }
+      .row {
+        display: flex;
+        gap: 0.4rem;
+        flex-wrap: wrap;
+        align-items: center;
       }
       .panels {
         display: flex;
         gap: 2.5rem;
         flex-wrap: wrap;
       }
-      .panel h2 {
-        font-size: 1rem;
-        margin: 0 0 0.5rem;
-      }
-      .panel p {
-        font-size: 0.85rem;
-        opacity: 0.75;
-        margin: 0.5rem 0 0;
-        max-width: 340px;
-      }
       canvas {
         border: 1px solid gray;
-        image-rendering: pixelated;
-      }
-      #stats {
-        font-family: ui-monospace, monospace;
-        font-size: 0.9rem;
       }
       button {
-        font-size: 0.9rem;
-        padding: 0.4rem 0.8rem;
+        font-size: 0.85rem;
+        padding: 0.35rem 0.6rem;
         cursor: pointer;
+      }
+      button.active {
+        outline: 2px solid rgb(40, 110, 240);
+        font-weight: bold;
+      }
+      .mono {
+        font-family: ui-monospace, monospace;
+        font-size: 0.95rem;
+      }
+      .sep {
+        width: 100%;
+        border: none;
+        border-top: 1px solid gray;
+        margin: 0.5rem 0;
+      }
+      .hint {
+        font-size: 0.85rem;
+        opacity: 0.75;
+        max-width: 620px;
+      }
+      .genome {
+        display: grid;
+        grid-template-columns: repeat(27, 1.15rem);
+        gap: 1px;
+        font-family: ui-monospace, monospace;
+        font-size: 0.72rem;
+        margin-bottom: 0.5rem;
+        width: max-content;
+      }
+      .genome span {
+        text-align: center;
+        padding: 2px 0;
+        border-radius: 2px;
+      }
+      .genome span.hl {
+        background: rgb(40, 110, 240);
+        color: white;
+        font-weight: bold;
       }
     </style>
   </head>
   <body>
-    <h1>Robby's World — Increment 1: grid + can placement</h1>
-    <button id="reroll">Re-roll (new random seed)</button>
+    <h1>Robby — tracing one strategy over a full 200-step session</h1>
+
+    <div class="row">
+      <span class="mono">strategy:</span>
+      <span id="stratButtons" class="row"></span>
+      <span style="width: 1rem"></span>
+      <button id="newGrid">New grid</button>
+    </div>
+    <div class="row">
+      <button id="playPause">▶ Play</button>
+      <button id="stepBack">◀ Step</button>
+      <button id="stepFwd">Step ▶</button>
+      <button id="reset">⟲ Reset</button>
+      <span class="mono" id="speedLabel"></span>
+      <input id="speed" type="range" min="1" max="60" value="20" />
+    </div>
+    <div class="row">
+      <button id="toggleGenome">Show genome</button>
+    </div>
+
+    <div id="genomePanel" style="display: none">
+      <h2>Genome of the chosen strategy (243 genes)</h2>
+      <div id="genomeGrid" class="genome"></div>
+      <div id="genomeReadout" class="mono"></div>
+      <p class="hint">
+        Each gene is the action for one situation, in situation order
+        (0=MoveN 1=MoveS 2=MoveE 3=MoveW 4=StayPut 5=PickUp 6=RandomMove). The
+        highlighted gene is the one Robby's <b>current</b> situation maps to — his
+        next action. Watch it jump around as he moves.
+      </p>
+    </div>
+
     <div class="panels">
-      <div class="panel">
-        <h2>One sampled 10×10 grid</h2>
-        <canvas id="grid" width="330" height="330"></canvas>
-        <p>Filled circles are cans, blank cells are empty. Each cell gets a can
-          with probability 0.5, independently.</p>
+      <div>
+        <h2>World</h2>
+        <canvas id="traceGrid" width="330" height="330"></canvas>
+        <div id="traceReadout" class="mono" style="margin-top: 0.5rem"></div>
       </div>
-      <div class="panel">
-        <h2>Per-cell can frequency over 5000 grids</h2>
-        <canvas id="heat" width="330" height="330"></canvas>
-        <p>Each cell colored by how often it held a can across 5000 fresh
-          layouts. Uniformly near 50% everywhere = the probability is per-cell,
-          not a fluke.</p>
+      <div>
+        <h2>Cumulative score over the session</h2>
+        <canvas id="scorePlot" width="520" height="330"></canvas>
       </div>
     </div>
-    <div id="stats">measuring…</div>
+    <p class="hint">
+      Robby (blue) starts at the top-left and follows the chosen strategy for 200
+      actions. His trail shows where he has been; the plot on the right is the
+      running score. Compare: the manual strategy <b>M</b> collects cans; a
+      <b>random strategy</b> is a fixed table of random actions, so it often
+      self-traps (e.g. crashing into the same wall forever) — exactly as the book
+      notes; a <b>random walk</b> re-rolls a direction each step and genuinely
+      wanders.
+    </p>
 
-    <hr style="width: 100%; border: none; border-top: 1px solid gray" />
+    <hr class="sep" />
 
-    <div class="panel">
-      <h2>Sensing — click a cell to place Robby</h2>
-      <canvas id="sense" width="330" height="330" style="cursor: pointer"></canvas>
-      <p>Robby (blue) senses only his 5 outlined cells. Click the four corners:
-        each should report a WALL on exactly two sides. Click a middle cell:
-        no walls at all.</p>
-      <div id="senseReadout" style="font-family: ui-monospace, monospace; font-size: 0.95rem; margin-top: 0.5rem"></div>
-    </div>
-
-    <hr style="width: 100%; border: none; border-top: 1px solid gray" />
-
-    <div class="panel">
-      <h2>Action stepper — apply one action, watch the score</h2>
-      <canvas id="step" width="330" height="330"></canvas>
-      <div id="stepButtons" style="display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; max-width: 340px"></div>
-      <div id="stepReadout" style="font-family: ui-monospace, monospace; font-size: 0.95rem; margin-top: 0.6rem"></div>
-      <p>Click an action to apply it to Robby (blue). Each step shows its reward
-        (+10 pick up a can, −1 pick up nothing, −5 crash into a wall, 0 move/stay)
-        and the running total. Undo reverts the last step so you can compare the
-        score before and after.</p>
-    </div>
-
-    <hr style="width: 100%; border: none; border-top: 1px solid gray" />
-
-    <div class="panel">
-      <h2>Fitness of baseline strategies (100 sessions each)</h2>
-      <div id="fitnessTable" style="font-family: ui-monospace, monospace; font-size: 0.95rem">computing…</div>
-      <p>Fitness = average session score over 100 random grids. Every fixed and
-        random strategy scores badly — the maximum possible is ≈ 500. This is the
-        baseline the genetic algorithm will have to improve on.</p>
+    <div>
+      <h2>Baseline fitness (100 sessions each)</h2>
+      <div id="fitnessTable" class="mono">computing…</div>
+      <p class="hint">
+        Average session score over many random grids. Every fixed and random
+        strategy scores badly; M reaches ~346; the maximum possible is ≈ 500.
+        This is the gap the genetic algorithm will close.
+      </p>
     </div>
 
     <script type="module" src="/src/viz/main.ts"></script>
