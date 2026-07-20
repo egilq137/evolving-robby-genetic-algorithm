@@ -5,7 +5,7 @@
 import { makeRng } from "../core/rng";
 import { NUM_SITUATIONS } from "../core/situation";
 import { NUM_ACTIONS, STAY_PUT, MOVE_EAST, PICK_UP } from "../core/actions";
-import { uniformStrategy, type Strategy } from "../core/strategy";
+import { uniformStrategy, manualStrategy, type Strategy } from "../core/strategy";
 import { computeFitness } from "../core/eval";
 
 function randomStrategy(rng: () => number): Strategy {
@@ -22,6 +22,9 @@ function render(): void {
     ["random #1", computeFitness(randomStrategy(makeRng(11)), makeRng(2))],
     ["random #2", computeFitness(randomStrategy(makeRng(22)), makeRng(3))],
     ["random #3", computeFitness(randomStrategy(makeRng(33)), makeRng(4))],
+    // Mitchell's hand-designed strategy M (book: ~346). Larger sample for a
+    // stable estimate.
+    ["manual (M)", computeFitness(manualStrategy(), makeRng(5), { numSessions: 2000 })],
   ];
   const lines = rows
     .map(([name, fit]) => `${name.padEnd(14)} ${fit.toFixed(1).padStart(9)}`)
