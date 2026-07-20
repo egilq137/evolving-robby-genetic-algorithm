@@ -101,14 +101,26 @@ Notes:
 - The situation->position ordering is fixed and identical everywhere it is used
   (fitness evaluation and offspring must agree on it).
 
-[DECISION] D2 — Situation-to-index encoding (the fixed ordering).
-  The chapter fixes an order but does not state the formula. We must choose one
-  and use it consistently.
-  Default: treat the 5 sensed states as a base-3 number.
+[DECISION] D2 — Situation-to-index encoding (the fixed ordering).  *** LOCKED ***
+  The chapter fixes an order but does not state the formula. We choose one that
+  is (a) a total bijection and (b) HUMAN-READABLE, matching the book's own
+  Table 9.1 ordering so situations can be checked against the text.
+  CHOSEN: treat the 5 senses as a 5-digit base-3 number in column order
+    [North, South, East, West, Current], with NORTH most-significant and
+    CURRENT least-significant (Current is the "last cell" that changes fastest).
     state code: EMPTY = 0, CAN = 1, WALL = 2
-    index = ((((C)*3 + N)*3 + S)*3 + E)*3 + W)      # C,N,S,E,W in a FIXED order
+    index = ((((North*3 + South)*3 + East)*3 + West)*3 + Current)
     yields index in 0..242.
-  (Any fixed bijection works; this one is simple and total.)
+  Human-readable consequence (0-indexed):
+    index 0   = all Empty
+    index 1   = all Empty except Current = Can
+    index 2   = all Empty except Current = Wall
+    index 3   = West = Can, rest Empty
+    ...
+    index 242 = all Wall
+  This matches the book's Table 9.1 (situation 1 = all empty; situation 2 =
+  current site holds a Can; ...). NOTE: the book numbers situations from 1;
+  our code indexes from 0, so book "situation N" = our index (N - 1).
 
 -------------------------------------------------------------------------------
 7.1 BENCHMARK (MANUAL) STRATEGY "M"
@@ -189,7 +201,7 @@ book uses 10,000) to confirm it generalizes.
 These must be settled before/while coding. Defaults proposed; revisit as needed.
 
 [DECISION] D1  Can on start site (0,0)?            Default: yes, 50% like others.
-[DECISION] D2  Situation-to-index encoding.        Default: base-3, Section 7.
+[DECISION] D2  Situation-to-index encoding.        LOCKED: base-3 [N,S,E,W,Cur].
 
 [DECISION] D3  Mutation rate.   *** MODEL PARAMETER (tunable) ***
   Chapter says only "a small probability." This is exposed as a configurable

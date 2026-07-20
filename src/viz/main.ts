@@ -12,6 +12,7 @@ import {
   type Grid,
 } from "../core/world";
 import { makeRng } from "../core/rng";
+import { encodeSituation } from "../core/situation";
 
 const CELL = 33; // pixels per cell (10 cells -> 330px canvas)
 const N = 10; // grid is 10 x 10
@@ -157,10 +158,12 @@ function drawSensing(): void {
   const wallCount = [s.north, s.south, s.east, s.west].filter(
     (v) => v === WALL,
   ).length;
+  const idx = encodeSituation(s);
   readout.innerHTML =
     `Robby at (row ${robby.row}, col ${robby.col})<br>` +
     `Current: ${NAME[s.current]} &nbsp; North: ${NAME[s.north]} &nbsp; ` +
     `South: ${NAME[s.south]} &nbsp; East: ${NAME[s.east]} &nbsp; West: ${NAME[s.west]}<br>` +
+    `<strong>Situation #${idx}</strong> (of 0..242) &nbsp; ` +
     `<small style="opacity:0.7">walls sensed: ${wallCount}</small>`;
 }
 
