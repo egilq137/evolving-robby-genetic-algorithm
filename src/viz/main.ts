@@ -14,6 +14,7 @@ import {
 import { makeRng } from "../core/rng";
 import { encodeSituation } from "../core/situation";
 import "./stepper";
+import "./fitness";
 
 const CELL = 33; // pixels per cell (10 cells -> 330px canvas)
 const N = 10; // grid is 10 x 10
@@ -150,9 +151,13 @@ function drawSensing(): void {
       }
     }
   }
-  // Robby marker
-  ctx.fillStyle = "rgb(40,110,240)";
-  ctx.fillRect(robby.col * CELL + 6, robby.row * CELL + 6, CELL - 12, CELL - 12);
+  // Robby marker: translucent box + solid border, so a can underneath shows.
+  ctx.fillStyle = "rgba(40,110,240,0.4)";
+  ctx.fillRect(robby.col * CELL + 3, robby.row * CELL + 3, CELL - 6, CELL - 6);
+  ctx.strokeStyle = "rgb(40,110,240)";
+  ctx.lineWidth = 3;
+  ctx.strokeRect(robby.col * CELL + 3, robby.row * CELL + 3, CELL - 6, CELL - 6);
+  ctx.lineWidth = 1;
 
   const s = sense(senseGrid, robby.row, robby.col);
   const readout = document.getElementById("senseReadout") as HTMLElement;
