@@ -82,6 +82,19 @@
       <div id="senseReadout" style="font-family: ui-monospace, monospace; font-size: 0.95rem; margin-top: 0.5rem"></div>
     </div>
 
+    <hr style="width: 100%; border: none; border-top: 1px solid gray" />
+
+    <div class="panel">
+      <h2>Action stepper — apply one action, watch the score</h2>
+      <canvas id="step" width="330" height="330"></canvas>
+      <div id="stepButtons" style="display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.6rem; max-width: 340px"></div>
+      <div id="stepReadout" style="font-family: ui-monospace, monospace; font-size: 0.95rem; margin-top: 0.6rem"></div>
+      <p>Click an action to apply it to Robby (blue). Each step shows its reward
+        (+10 pick up a can, −1 pick up nothing, −5 crash into a wall, 0 move/stay)
+        and the running total. Undo reverts the last step so you can compare the
+        score before and after.</p>
+    </div>
+
     <script type="module" src="/src/viz/main.ts"></script>
   </body>
 </html>

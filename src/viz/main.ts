@@ -13,6 +13,7 @@ import {
 } from "../core/world";
 import { makeRng } from "../core/rng";
 import { encodeSituation } from "../core/situation";
+import "./stepper";
 
 const CELL = 33; // pixels per cell (10 cells -> 330px canvas)
 const N = 10; // grid is 10 x 10
