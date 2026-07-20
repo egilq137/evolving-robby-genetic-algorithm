@@ -14,6 +14,7 @@ import type { Rng } from "./rng";
 
 export const EMPTY = 0;
 export const CAN = 1;
+export const WALL = 2; // never stored in the grid; only ever SENSED at the edge
 
 export interface Grid {
   rows: number;
@@ -71,4 +72,49 @@ export function countCans(grid: Grid): number {
   let n = 0;
   for (let i = 0; i < grid.cells.length; i++) n += grid.cells[i];
   return n;
+}
+
+// --- Sensing -----------------------------------------------------------------
+//
+// Robby senses 5 sites: his current site plus the four orthogonal neighbors.
+// Directions (from specs.txt, fixed by the book's Figure 9.1 where Robby at
+// (0,0) sees North and West as walls):
+//   North = row - 1   South = row + 1   East = col + 1   West = col - 1
+// Any neighbor outside the grid reads WALL.
+
+export interface Senses {
+  current: number; // EMPTY | CAN (never WALL for a valid position)
+  north: number; // EMPTY | CAN | WALL
+  south: number;
+  east: number;
+  west: number;
+}
+
+/**
+ * Contents of site (row, col): the stored cell if inside the grid, otherwise
+ * WALL. This is the single place where "off the grid = wall" is decided.
+ */
+export function cellOrWall(grid: Grid, row: number, col: number): number {
+  if (row < 0 || row >= grid.rows || col < 0 || col >= grid.cols) return WALL;
+  return grid.cells[row * grid.cols + col];
+}
+
+/**
+ * What Robby senses standing at (row, col). Throws if (row, col) is itself off
+ * the grid: Robby standing on a wall is an invalid state and should surface as
+ * a bug, not be silently sensed as WALL.
+ */
+export function sense(grid: Grid, row: number, col: number): Senses {
+  if (row < 0 || row >= grid.rows || col < 0 || col >= grid.cols) {
+    throw new Error(
+      `Robby is off the grid at (${row}, ${col}); valid rows 0..${grid.rows - 1}, cols 0..${grid.cols - 1}`,
+    );
+  }
+  return {
+    current: cellOrWall(grid, row, col),
+    north: cellOrWall(grid, row - 1, col),
+    south: cellOrWall(grid, row + 1, col),
+    east: cellOrWall(grid, row, col + 1),
+    west: cellOrWall(grid, row, col - 1),
+  };
 }

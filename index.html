@@ -70,6 +70,18 @@
       </div>
     </div>
     <div id="stats">measuring…</div>
+
+    <hr style="width: 100%; border: none; border-top: 1px solid gray" />
+
+    <div class="panel">
+      <h2>Sensing — click a cell to place Robby</h2>
+      <canvas id="sense" width="330" height="330" style="cursor: pointer"></canvas>
+      <p>Robby (blue) senses only his 5 outlined cells. Click the four corners:
+        each should report a WALL on exactly two sides. Click a middle cell:
+        no walls at all.</p>
+      <div id="senseReadout" style="font-family: ui-monospace, monospace; font-size: 0.95rem; margin-top: 0.5rem"></div>
+    </div>
+
     <script type="module" src="/src/viz/main.ts"></script>
   </body>
 </html>

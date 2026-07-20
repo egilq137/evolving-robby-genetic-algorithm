@@ -1,7 +1,16 @@
 // A quick visual sanity check for Increment 1, using the REAL world code
 // (not a re-implementation) so what you see is what the tests test.
 
-import { createGrid, placeCans, countCans, CAN, type Grid } from "../core/world";
+import {
+  createGrid,
+  placeCans,
+  countCans,
+  sense,
+  CAN,
+  WALL,
+  EMPTY,
+  type Grid,
+} from "../core/world";
 import { makeRng } from "../core/rng";
 
 const CELL = 33; // pixels per cell (10 cells -> 330px canvas)
@@ -93,3 +102,80 @@ document.getElementById("reroll")!.addEventListener("click", () => {
   seed = Math.floor(Math.random() * 1e6);
   run(seed);
 });
+
+// --- Interactive sensing demo ------------------------------------------------
+
+const senseGrid = placeCans(createGrid(N, N), 0.5, makeRng(777));
+let robby = { row: 0, col: 0 };
+
+const NAME: Record<number, string> = {
+  [EMPTY]: "Empty",
+  [CAN]: "Can",
+  [WALL]: "Wall",
+};
+
+function drawSensing(): void {
+  const canvas = document.getElementById("sense") as HTMLCanvasElement;
+  const ctx = canvas.getContext("2d")!;
+  const fg = getComputedStyle(document.body).color;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  const neighbors = [
+    { row: robby.row - 1, col: robby.col }, // north
+    { row: robby.row + 1, col: robby.col }, // south
+    { row: robby.row, col: robby.col + 1 }, // east
+    { row: robby.row, col: robby.col - 1 }, // west
+  ];
+  const isSensed = (r: number, c: number) =>
+    (r === robby.row && c === robby.col) ||
+    neighbors.some((n) => n.row === r && n.col === c);
+
+  for (let r = 0; r < N; r++) {
+    for (let c = 0; c < N; c++) {
+      const x = c * CELL;
+      const y = r * CELL;
+      if (isSensed(r, c)) {
+        ctx.fillStyle = "rgba(120,170,255,0.25)"; // highlight sensed cells
+        ctx.fillRect(x, y, CELL, CELL);
+      }
+      ctx.strokeStyle = "gray";
+      ctx.strokeRect(x, y, CELL, CELL);
+      if (senseGrid.cells[r * N + c] === CAN) {
+        ctx.fillStyle = fg;
+        ctx.beginPath();
+        ctx.arc(x + CELL / 2, y + CELL / 2, CELL * 0.28, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  }
+  // Robby marker
+  ctx.fillStyle = "rgb(40,110,240)";
+  ctx.fillRect(robby.col * CELL + 6, robby.row * CELL + 6, CELL - 12, CELL - 12);
+
+  const s = sense(senseGrid, robby.row, robby.col);
+  const readout = document.getElementById("senseReadout") as HTMLElement;
+  const wallCount = [s.north, s.south, s.east, s.west].filter(
+    (v) => v === WALL,
+  ).length;
+  readout.innerHTML =
+    `Robby at (row ${robby.row}, col ${robby.col})<br>` +
+    `Current: ${NAME[s.current]} &nbsp; North: ${NAME[s.north]} &nbsp; ` +
+    `South: ${NAME[s.south]} &nbsp; East: ${NAME[s.east]} &nbsp; West: ${NAME[s.west]}<br>` +
+    `<small style="opacity:0.7">walls sensed: ${wallCount}</small>`;
+}
+
+(document.getElementById("sense") as HTMLCanvasElement).addEventListener(
+  "click",
+  (e) => {
+    const canvas = e.currentTarget as HTMLCanvasElement;
+    const rect = canvas.getBoundingClientRect();
+    const col = Math.floor(((e.clientX - rect.left) / rect.width) * N);
+    const row = Math.floor(((e.clientY - rect.top) / rect.height) * N);
+    robby = {
+      row: Math.max(0, Math.min(N - 1, row)),
+      col: Math.max(0, Math.min(N - 1, col)),
+    };
+    drawSensing();
+  },
+);
+drawSensing();
