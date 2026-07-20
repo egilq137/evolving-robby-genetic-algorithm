@@ -19,32 +19,46 @@
 // Note: the book numbers situations from 1; we index from 0, so the book's
 // "situation N" is our index (N - 1).
 
-import { EMPTY, CAN, WALL, type Senses } from "./world";
+import { EMPTY, CAN, WALL, NUM_STATES, type Senses } from "./world";
 
-export const NUM_SITUATIONS = 243; // 3^5
+// The FIXED, human-readable ordering (spec D2): most-significant digit first,
+// Current last (it changes fastest). This array is the single source of truth
+// for the ordering; encode/decode and the derived counts all follow from it.
+export const SITUATION_ORDER = [
+  "north",
+  "south",
+  "east",
+  "west",
+  "current",
+] as const;
 
-/** Map the 5 senses to a situation index in 0..242. */
+/** Number of sensed sites (= number of base-NUM_STATES digits). */
+export const NUM_SENSES = SITUATION_ORDER.length; // 5
+
+/** Total number of distinct situations, derived: NUM_STATES ^ NUM_SENSES. */
+export const NUM_SITUATIONS = NUM_STATES ** NUM_SENSES; // 3^5 = 243
+
+/** Map the senses to a situation index in 0..NUM_SITUATIONS-1. */
 export function encodeSituation(s: Senses): number {
-  return ((((s.north * 3 + s.south) * 3 + s.east) * 3 + s.west) * 3) + s.current;
+  let idx = 0;
+  for (const key of SITUATION_ORDER) idx = idx * NUM_STATES + s[key];
+  return idx;
 }
 
-/** Inverse of encodeSituation: map an index 0..242 back to the 5 senses. */
+/** Inverse of encodeSituation: map an index back to the senses. */
 export function decodeSituation(index: number): Senses {
   if (!Number.isInteger(index) || index < 0 || index >= NUM_SITUATIONS) {
     throw new Error(
       `situation index must be an integer in 0..${NUM_SITUATIONS - 1}, got ${index}`,
     );
   }
-  const current = index % 3;
-  index = Math.floor(index / 3);
-  const west = index % 3;
-  index = Math.floor(index / 3);
-  const east = index % 3;
-  index = Math.floor(index / 3);
-  const south = index % 3;
-  index = Math.floor(index / 3);
-  const north = index % 3;
-  return { current, north, south, east, west };
+  const out = {} as Record<(typeof SITUATION_ORDER)[number], number>;
+  // Fill digits from least-significant (last in the order) to most.
+  for (let k = NUM_SENSES - 1; k >= 0; k--) {
+    out[SITUATION_ORDER[k]] = index % NUM_STATES;
+    index = Math.floor(index / NUM_STATES);
+  }
+  return out as Senses;
 }
 
 const STATE_NAME: Record<number, string> = {

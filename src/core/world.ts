@@ -16,6 +16,9 @@ export const EMPTY = 0;
 export const CAN = 1;
 export const WALL = 2; // never stored in the grid; only ever SENSED at the edge
 
+/** How many distinct states a sensed site can be in: EMPTY, CAN, WALL. */
+export const NUM_STATES = 3;
+
 export interface Grid {
   rows: number;
   cols: number;
