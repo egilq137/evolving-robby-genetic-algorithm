@@ -2,8 +2,8 @@
 // one generation at a time so we can:
 //   - play evolution continuously (or +100 at a time) and watch a live replica
 //     of the book's Figure 9.6 (best fitness vs generation) draw itself;
-//   - trace any strategy (Manual M, a clean sweep, the current champion,
-//     best-ever, a random walk, ...) over a full 200-step session on a grid;
+//   - trace any strategy (Manual M, the current champion, best-ever, a random
+//     walk, ...) over a full 200-step session on a grid;
 //   - read a few insight metrics (population diversity, and how many of the key
 //     "can-here -> PickUp" genes the champion has actually learned).
 //
@@ -14,17 +14,7 @@
 import { createGrid, placeCans, sense, CAN, type Grid } from "../core/world";
 import { makeRng, type Rng } from "../core/rng";
 import { encodeSituation, decodeSituation, NUM_SITUATIONS } from "../core/situation";
-import {
-  ACTION_NAMES,
-  PICK_UP,
-  RANDOM_MOVE,
-  REWARD_PICKUP,
-  MOVE_EAST,
-  MOVE_WEST,
-  MOVE_SOUTH,
-  STAY_PUT,
-  applyAction,
-} from "../core/actions";
+import { ACTION_NAMES, PICK_UP, RANDOM_MOVE, REWARD_PICKUP } from "../core/actions";
 import {
   manualStrategy,
   randomStrategy,
@@ -340,66 +330,19 @@ const RANDOM_STRAT = "Random strategy";
 const CHAMPION = "Champion (latest gen)";
 const BEST_EVER = "Best-ever";
 
-// A "policy" decides an action from Robby's WHOLE state (grid + position), unlike
-// a genome/Strategy which sees only the 5 local senses. The clean sweep needs
-// this: a serpentine lawnmower must know which row it's on and whether it has
-// reached the wall — information no memoryless 243-gene table can carry. That's
-// exactly why it can't be a genome, and why it's such a useful teaching contrast.
-type Policy = (grid: Grid, robby: { row: number; col: number }) => number;
-
-/**
- * Boustrophedon ("ox-plough") sweep: pick up a can if standing on one, else walk
- * the grid one cell at a time — east along even rows, west along odd rows, drop
- * south at each wall — until every cell has been visited, then stay put. Never
- * random, never crashes into a wall. Visits all 100 cells, so it collects every
- * can — but only because it knows where it is.
- */
-function makeSweepPolicy(): Policy {
-  return (grid, robby) => {
-    const { row, col } = robby;
-    if (grid.cells[row * grid.cols + col] === CAN) return PICK_UP;
-    const eastward = row % 2 === 0;
-    if (eastward && col < grid.cols - 1) return MOVE_EAST;
-    if (!eastward && col > 0) return MOVE_WEST;
-    return row < grid.rows - 1 ? MOVE_SOUTH : STAY_PUT; // end of row: drop down, or done
-  };
-}
-
-interface TraceEntry {
-  name: string;
-  genome?: () => Strategy; // a 243-gene table, traceable through traceSession
-  policy?: () => Policy; // position-aware; no genome to display
-}
-
-const TRACE_STRATEGIES: TraceEntry[] = [
-  { name: CHAMPION, genome: () => champion.slice() },
-  { name: BEST_EVER, genome: () => bestEver.slice() },
-  { name: "Manual (M)", genome: () => manualStrategy() },
-  { name: "Clean sweep", policy: () => makeSweepPolicy() },
-  { name: "Random walk", genome: () => uniformStrategy(RANDOM_MOVE) },
-  { name: RANDOM_STRAT, genome: () => randomStrategy(makeRng(randomStratSeed)) },
+const TRACE_STRATEGIES: { name: string; make: () => Strategy }[] = [
+  { name: CHAMPION, make: () => champion.slice() },
+  { name: BEST_EVER, make: () => bestEver.slice() },
+  { name: "Manual (M)", make: () => manualStrategy() },
+  { name: "Random walk", make: () => uniformStrategy(RANDOM_MOVE) },
+  { name: RANDOM_STRAT, make: () => randomStrategy(makeRng(randomStratSeed)) },
 ];
-
-/** Like traceSession, but drives an arbitrary position-aware policy. */
-function tracePolicy(policy: Policy, grid: Grid, rng: Rng, numActions: number): SessionStep[] {
-  const robby = { row: 0, col: 0 };
-  const steps: SessionStep[] = [];
-  let cumulative = 0;
-  for (let i = 0; i < numActions; i++) {
-    const action = policy(grid, robby);
-    const reward = applyAction(grid, robby, action, rng);
-    cumulative += reward;
-    steps.push({ action, reward, cumulative, row: robby.row, col: robby.col });
-  }
-  return steps;
-}
 
 let traceSeed = 2024;
 let randomStratSeed = 1;
 let traceIndex = 0;
 let grid0: Grid;
-let traced: Strategy | undefined; // set only for genome strategies
-let hasGenome = true;
+let traced: Strategy;
 let trace: SessionStep[] = [];
 let step = 0;
 let traceTimer: number | undefined;
@@ -411,35 +354,12 @@ let lastHl = -1;
 function rebuildTrace(): void {
   stopTrace();
   grid0 = placeCans(createGrid(N, N), 0.5, makeRng(traceSeed));
-  const entry = TRACE_STRATEGIES[traceIndex];
+  traced = TRACE_STRATEGIES[traceIndex].make();
   const g: Grid = { rows: N, cols: N, cells: grid0.cells.slice() };
-  if (entry.genome) {
-    hasGenome = true;
-    traced = entry.genome();
-    trace = traceSession(traced, g, makeRng(traceSeed + 1), STEPS);
-  } else {
-    hasGenome = false;
-    traced = undefined;
-    trace = tracePolicy(entry.policy!(), g, makeRng(traceSeed + 1), STEPS);
-  }
+  trace = traceSession(traced, g, makeRng(traceSeed + 1), STEPS);
   step = 0;
-  updateGenomeAvailability();
   updateGenomeDigits();
   renderTrace();
-}
-
-/** Policies have no 243-gene table, so the genome viewer is disabled for them. */
-function updateGenomeAvailability(): void {
-  const toggle = $("toggleGenome") as HTMLButtonElement;
-  toggle.disabled = !hasGenome;
-  toggle.title = hasGenome
-    ? ""
-    : "This strategy decides from Robby's position, not a fixed 243-gene table, so there is no genome to show.";
-  if (!hasGenome && genomeVisible) {
-    genomeVisible = false;
-    $("genomePanel").style.display = "none";
-    toggle.textContent = "Show genome";
-  }
 }
 
 /** If the user is watching a live-updating strategy, refresh it after evolving. */
@@ -550,12 +470,12 @@ function currentSituation(): number {
 }
 
 function updateGenomeDigits(): void {
-  if (geneCells.length === 0 || !traced) return;
+  if (geneCells.length === 0) return;
   for (let i = 0; i < NUM_SITUATIONS; i++) geneCells[i].textContent = String(traced[i]);
 }
 
 function updateGenomeHighlight(): void {
-  if (!genomeVisible || geneCells.length === 0 || !traced) return;
+  if (!genomeVisible || geneCells.length === 0) return;
   const situ = currentSituation();
   if (lastHl >= 0) geneCells[lastHl].classList.remove("hl");
   geneCells[situ].classList.add("hl");
