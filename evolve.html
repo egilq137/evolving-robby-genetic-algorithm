@@ -3,96 +3,247 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Robby — Evolution (Figure 9.6, live)</title>
+    <title>Robby the Robot — Evolution, live</title>
     <style>
       :root {
         color-scheme: light dark;
-        font-family: system-ui, sans-serif;
+        --accent: rgb(40, 110, 240);
+        --line: rgba(128, 128, 128, 0.28);
+        --panel: rgba(128, 128, 128, 0.07);
+        --panel-strong: rgba(128, 128, 128, 0.14);
+        font-family: system-ui, -apple-system, sans-serif;
+      }
+      * {
+        box-sizing: border-box;
       }
       body {
+        margin: 0 auto;
+        max-width: 1200px;
+        padding: clamp(1rem, 3vw, 2rem);
+        line-height: 1.55;
+      }
+      a {
+        color: var(--accent);
+      }
+      nav {
+        display: flex;
+        gap: 1rem;
+        font-size: 0.85rem;
+        margin-bottom: 1.25rem;
+      }
+      header h1 {
+        font-size: clamp(1.4rem, 3.5vw, 2rem);
+        margin: 0 0 0.35rem;
+        line-height: 1.15;
+      }
+      header .intro {
         margin: 0;
-        padding: 1.75rem;
+        opacity: 0.8;
+        max-width: 60ch;
+        font-size: 1rem;
+      }
+
+      /* two-column teaching layout: stage (left) + sidebar (right) */
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 322px;
+        gap: 1.5rem;
+        align-items: start;
+        margin-top: 1.5rem;
+      }
+      @media (max-width: 900px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .stage {
         display: flex;
         flex-direction: column;
-        gap: 1.1rem;
-        max-width: 1100px;
+        gap: 1.5rem;
+        min-width: 0;
       }
-      h1 {
-        font-size: 1.35rem;
-        margin: 0;
+      .sidebar {
+        display: flex;
+        flex-direction: column;
+        gap: 1.5rem;
       }
-      h2 {
-        font-size: 1rem;
-        margin: 0 0 0.5rem;
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 1.1rem 1.2rem;
+        background: var(--panel);
       }
+      .card > h2 {
+        font-size: 1.05rem;
+        margin: 0 0 0.15rem;
+      }
+      .card > .sub {
+        font-size: 0.85rem;
+        opacity: 0.72;
+        margin: 0 0 0.9rem;
+      }
+
       .row {
         display: flex;
-        gap: 0.4rem;
+        gap: 0.45rem;
         flex-wrap: wrap;
         align-items: center;
       }
-      .panels {
-        display: flex;
-        gap: 2rem;
-        flex-wrap: wrap;
-        align-items: flex-start;
+      .controls {
+        margin-bottom: 0.85rem;
       }
-      canvas {
-        border: 1px solid gray;
-        max-width: 100%;
-      }
+
       button {
         font-size: 0.85rem;
-        padding: 0.35rem 0.6rem;
+        padding: 0.4rem 0.7rem;
+        border: 1px solid var(--line);
+        border-radius: 7px;
+        background: var(--panel-strong);
+        color: inherit;
         cursor: pointer;
+      }
+      button:hover:not(:disabled) {
+        border-color: var(--accent);
       }
       button:disabled {
         opacity: 0.4;
         cursor: default;
       }
+      button.primary {
+        background: var(--accent);
+        border-color: var(--accent);
+        color: #fff;
+        font-weight: 600;
+      }
       button.active {
-        outline: 2px solid rgb(40, 110, 240);
-        font-weight: bold;
+        outline: 2px solid var(--accent);
+        outline-offset: -1px;
+        font-weight: 600;
       }
-      input[type="number"] {
-        width: 5rem;
-      }
-      label.field {
-        font-size: 0.8rem;
-        display: inline-flex;
-        gap: 0.3rem;
-        align-items: center;
-      }
-      .mono {
+
+      .stats {
         font-family: ui-monospace, monospace;
-        font-size: 0.92rem;
+        font-size: 0.85rem;
+        background: var(--panel-strong);
+        border-radius: 8px;
+        padding: 0.55rem 0.7rem;
+        margin-bottom: 0.9rem;
+        overflow-x: auto;
       }
       .dim {
         opacity: 0.7;
       }
-      .sep {
-        width: 100%;
-        border: none;
-        border-top: 1px solid gray;
-        margin: 0.4rem 0;
+      .mono {
+        font-family: ui-monospace, monospace;
       }
-      .hint {
+
+      canvas {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        display: block;
+      }
+      .plot-wrap {
+        width: 100%;
+      }
+      #plot {
+        width: 100%;
+        height: auto;
+      }
+      #world,
+      #score {
+        max-width: 100%;
+        height: auto;
+      }
+
+      .caption {
         font-size: 0.83rem;
         opacity: 0.75;
-        max-width: 720px;
+        margin: 0.8rem 0 0;
       }
-      .card {
-        border: 1px solid rgba(128, 128, 128, 0.35);
+
+      .transport {
+        margin: 0.6rem 0 0.2rem;
+      }
+      input[type="range"] {
+        accent-color: var(--accent);
+      }
+
+      .trace-panels {
+        display: flex;
+        gap: 1.25rem;
+        flex-wrap: wrap;
+        margin-top: 0.9rem;
+      }
+      .trace-panels > div {
+        flex: 1 1 260px;
+        min-width: 0;
+      }
+      .trace-panels h3 {
+        font-size: 0.85rem;
+        margin: 0 0 0.4rem;
+        opacity: 0.8;
+      }
+      #traceReadout {
+        font-family: ui-monospace, monospace;
+        font-size: 0.85rem;
+        margin-top: 0.5rem;
+      }
+
+      /* presets */
+      .field {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.6rem;
+        padding: 0.35rem 0;
+        font-size: 0.9rem;
+        border-bottom: 1px solid var(--line);
+      }
+      .field:last-of-type {
+        border-bottom: none;
+      }
+      .field input {
+        width: 5.5rem;
+        padding: 0.3rem 0.4rem;
+        border: 1px solid var(--line);
         border-radius: 6px;
-        padding: 0.6rem 0.8rem;
+        background: transparent;
+        color: inherit;
+        font: inherit;
+        text-align: right;
+      }
+
+      .explainer h3 {
+        font-size: 0.9rem;
+        margin: 1rem 0 0.35rem;
+      }
+      .explainer p,
+      .explainer li {
+        font-size: 0.88rem;
+        opacity: 0.9;
+      }
+      .explainer ol,
+      .explainer ul {
+        margin: 0.3rem 0;
+        padding-left: 1.2rem;
+      }
+      .explainer li {
+        margin: 0.25rem 0;
+      }
+
+      /* genome viewer: 243 cells; scroll sideways on narrow screens */
+      .genome-scroll {
+        overflow-x: auto;
+        padding-bottom: 0.3rem;
       }
       .genome {
         display: grid;
-        grid-template-columns: repeat(27, 1.15rem);
+        grid-template-columns: repeat(27, 1.1rem);
         gap: 1px;
         font-family: ui-monospace, monospace;
-        font-size: 0.72rem;
-        margin-bottom: 0.5rem;
+        font-size: 0.7rem;
         width: max-content;
       }
       .genome span {
@@ -101,102 +252,155 @@
         border-radius: 2px;
       }
       .genome span.hl {
-        background: rgb(40, 110, 240);
-        color: white;
+        background: var(--accent);
+        color: #fff;
         font-weight: bold;
+      }
+      #genomeReadout {
+        font-family: ui-monospace, monospace;
+        font-size: 0.85rem;
+        margin-top: 0.5rem;
       }
     </style>
   </head>
   <body>
-    <nav class="row" style="gap: 0.75rem; font-size: 0.9rem">
+    <nav>
       <a href="/index.html">Session trace</a>
       <b>Evolution</b>
     </nav>
-    <h1>Robby — watching evolution close the gap (live Figure 9.6)</h1>
 
-    <div class="row">
-      <button id="runPause">▶ Play evolution</button>
-      <button id="evolve100">+100 gens</button>
-      <span style="width: 0.75rem"></span>
-      <button id="reseed" title="new random run with the settings below">↻ New run (random seed)</button>
-      <button id="apply" title="restart from seed 1 using the settings below">Apply settings (seed 1)</button>
-    </div>
-
-    <div class="row card">
-      <label class="field">pop size <input id="popSize" type="number" value="200" min="10" step="10" /></label>
-      <label class="field">sessions/fitness <input id="numSessions" type="number" value="100" min="1" step="10" /></label>
-      <label class="field">mutation rate % <input id="mutationRate" type="number" value="0.5" min="0" step="0.1" /></label>
-      <label class="field" title="How many random individuals compete for each parent slot. Higher = the population fills up faster with the current best (stronger pull toward the top); k=1 is no selection at all.">selection pressure <input id="tournamentK" type="number" value="3" min="1" step="1" /></label>
-      <span class="hint" style="margin-left: 0.5rem">
-        Changing these takes effect on the next run (Apply / New run). Lower
-        sessions/fitness = faster but noisier selection — the exact tradeoff CRN
-        was designed to soften. “Play evolution” runs to generation 1000 or
-        until you pause.
-      </span>
-    </div>
-
-    <div class="mono" id="stats">initializing…</div>
-
-    <div>
-      <h2>Best fitness in population vs. generation</h2>
-      <canvas id="plot" width="820" height="380"></canvas>
-      <p class="hint">
-        Live replica of the book's Figure 9.6. Blue = best individual each
-        generation; gray = population average. Dashed lines mark the hand-designed
-        strategy <b>M ≈ 346</b> and the practical ceiling <b>≈ 500</b>. Evolution
-        typically blasts past M within a couple hundred generations. The gap
-        between blue and gray shows how much selection pressure vs. diversity the
-        population currently has.
+    <header>
+      <h1>Robby the Robot learns to clean up</h1>
+      <p class="intro">
+        A live, interactive take on Melanie Mitchell's evolving-robot example: a
+        genetic algorithm teaches a memoryless robot to collect soda cans, from
+        random rules to near-perfect play.
       </p>
-    </div>
+    </header>
 
-    <hr class="sep" />
+    <main class="layout">
+      <!-- LEFT: the simulations and their controls -->
+      <div class="stage">
+        <section class="card">
+          <h2>Live evolution — Figure 9.6</h2>
+          <p class="sub">Best fitness in the population, generation by generation.</p>
 
-    <div class="row">
-      <span class="mono">trace strategy:</span>
-      <span id="traceButtons" class="row"></span>
-      <span style="width: 0.75rem"></span>
-      <button id="newGrid">New grid</button>
-      <button id="toggleGenome">Show genome</button>
-    </div>
-    <div class="row">
-      <button id="play">▶ Play</button>
-      <button id="stepBack">◀ Step</button>
-      <button id="stepFwd">Step ▶</button>
-      <button id="resetTrace">⟲ Reset</button>
-      <span class="mono" id="speedLabel"></span>
-      <input id="speed" type="range" min="1" max="60" value="20" />
-    </div>
+          <div class="row controls">
+            <button id="runPause" class="primary">▶ Play evolution</button>
+            <button id="evolve100">+100 gens</button>
+            <span style="flex: 1"></span>
+            <button id="reseed" title="new random run with the current presets">↻ New run</button>
+            <button id="apply" title="restart from seed 1 with the current presets">Apply presets</button>
+          </div>
 
-    <div id="genomePanel" style="display: none">
-      <h2>Genome of the traced strategy (243 genes)</h2>
-      <div id="genomeGrid" class="genome"></div>
-      <div id="genomeReadout" class="mono"></div>
-      <p class="hint">
-        Each gene is the action for one situation (0=MoveN 1=MoveS 2=MoveE 3=MoveW
-        4=StayPut 5=PickUp 6=RandomMove). The highlighted gene is the one Robby's
-        current situation maps to.
-      </p>
-    </div>
+          <div id="stats" class="stats">initializing…</div>
 
-    <div class="panels">
-      <div>
-        <h2>World</h2>
-        <canvas id="world" width="300" height="300"></canvas>
-        <div id="traceReadout" class="mono" style="margin-top: 0.5rem"></div>
+          <div class="plot-wrap">
+            <canvas id="plot" width="820" height="380"></canvas>
+          </div>
+
+          <p class="caption">
+            Blue = best individual each generation; grey = population average.
+            Dashed lines mark the hand-written strategy <b>M ≈ 346</b> and the
+            practical ceiling <b>≈ 500</b>. Evolution usually blasts past M within
+            a couple hundred generations.
+          </p>
+        </section>
+
+        <section class="card">
+          <h2>Inspect one strategy on one grid</h2>
+          <p class="sub">Watch a chosen brain run a full 200-step cleaning session.</p>
+
+          <div class="row" id="traceButtons"></div>
+          <div class="row" style="margin-top: 0.5rem">
+            <button id="newGrid">New grid</button>
+            <button id="toggleGenome">Show genome</button>
+          </div>
+
+          <div class="row transport">
+            <button id="play">▶ Play</button>
+            <button id="stepBack">◀ Step</button>
+            <button id="stepFwd">Step ▶</button>
+            <button id="resetTrace">⟲ Reset</button>
+            <span class="mono" id="speedLabel" style="font-size: 0.8rem"></span>
+            <input id="speed" type="range" min="1" max="60" value="20" />
+          </div>
+
+          <div id="genomePanel" style="display: none; margin-top: 0.8rem">
+            <h3 style="font-size: 0.85rem; margin: 0 0 0.4rem; opacity: 0.8">
+              Genome — 243 genes (one action per situation)
+            </h3>
+            <div class="genome-scroll">
+              <div id="genomeGrid" class="genome"></div>
+            </div>
+            <div id="genomeReadout" class="mono"></div>
+            <p class="caption">
+              0=MoveN 1=MoveS 2=MoveE 3=MoveW 4=StayPut 5=PickUp 6=RandomMove. The
+              highlighted gene is the one Robby's current situation maps to.
+            </p>
+          </div>
+
+          <div class="trace-panels">
+            <div>
+              <h3>World</h3>
+              <canvas id="world" width="300" height="300"></canvas>
+              <div id="traceReadout"></div>
+            </div>
+            <div>
+              <h3>Cumulative score</h3>
+              <canvas id="score" width="460" height="300"></canvas>
+            </div>
+          </div>
+        </section>
       </div>
-      <div>
-        <h2>Cumulative score over the session</h2>
-        <canvas id="score" width="460" height="300"></canvas>
-      </div>
-    </div>
-    <p class="hint">
-      Pick <b>Champion</b> and hit <b>+100 gens</b> a few times, then re-select
-      Champion (or Best-ever) to watch the evolved robot sweep the grid — compare
-      its path to <b>M</b> and to a <b>random walk</b> on the same layout. The
-      Champion refreshes to the latest generation automatically when evolution
-      stops.
-    </p>
+
+      <!-- RIGHT: presets and the explainer -->
+      <aside class="sidebar">
+        <section class="card">
+          <h2>Presets</h2>
+          <p class="sub">Applied when you start a New run or Apply presets.</p>
+          <label class="field">pop size <input id="popSize" type="number" value="200" min="10" step="10" /></label>
+          <label class="field">sessions / fitness <input id="numSessions" type="number" value="100" min="1" step="10" /></label>
+          <label class="field">mutation rate % <input id="mutationRate" type="number" value="0.5" min="0" step="0.1" /></label>
+          <label class="field" title="How many random individuals compete for each parent slot. Higher = stronger pull toward the current best; 1 = no selection.">selection pressure <input id="tournamentK" type="number" value="3" min="1" step="1" /></label>
+          <p class="caption">
+            Lower sessions/fitness = faster but noisier selection — the tradeoff
+            common random numbers was added to soften.
+          </p>
+        </section>
+
+        <section class="card explainer">
+          <h2>What is this?</h2>
+          <p>
+            Robby lives on a 10×10 grid littered with cans. He sees only his own
+            cell and its four neighbours, and has <b>no memory</b>. His whole brain
+            is a table of 243 rules — one action for each thing he might see. A
+            genetic algorithm breeds these tables over generations, keeping what
+            scores well, until Robby cleans up almost perfectly.
+          </p>
+
+          <h3>How to use it</h3>
+          <ol>
+            <li>Press <b>Play evolution</b> (or <b>+100 gens</b>) and watch best fitness climb past M.</li>
+            <li>Pause any time; tweak the presets and hit <b>New run</b> to compare.</li>
+            <li>Below, pick <b>Champion</b> and step through a session to see how the evolved robot behaves.</li>
+          </ol>
+
+          <h3>The strategies</h3>
+          <ul>
+            <li><b>Champion / Best-ever</b> — the evolved brains (Champion refreshes as evolution runs).</li>
+            <li><b>Manual (M)</b> — Mitchell's hand-written rule; scores ~346.</li>
+            <li>
+              <b>Clean sweep</b> — a perfect serpentine lawnmower that visits every
+              cell and grabs every can. It only works because it <i>knows where it
+              is</i> — the one thing Robby can't. It shows the ceiling a robot
+              <i>with</i> a map could reach.
+            </li>
+            <li><b>Random walk / Random strategy</b> — baselines that wander or self-trap.</li>
+          </ul>
+        </section>
+      </aside>
+    </main>
 
     <script type="module" src="/src/viz/evolve.ts"></script>
   </body>
