@@ -214,26 +214,37 @@ These must be settled before/while coding. Defaults proposed; revisit as needed.
   Mechanism: for each of the 243 genes in a child, with probability
   `mutationRate` replace it with a fresh uniform random action 0..6.
 
-[DECISION] D4  Selection method under NEGATIVE fitness.   *** LOCKED: RANKING ***
+[DECISION] D4  Selection method under NEGATIVE fitness.   *** TOURNAMENT (k=3) ***
+  INVARIANT: every member of a generation is eligible to be selected as a parent
+  (nonzero chance for all); the best is most likely but no one is excluded.
   IMPORTANT GOTCHA: early strategies have negative fitness (book: best -81,
-  worst -825). "Probability proportional to fitness" is undefined/broken when
-  fitnesses are negative. Selection must depend only on relative order, not on
-  raw fitness magnitude.
-  CHOSEN: Rank-based selection.
-    - Each generation, sort the 200 individuals by fitness (worst -> best).
-    - Assign a selection weight from rank: rank r (1 = worst .. 200 = best)
-      gets weight proportional to r (linear ranking). Best is most likely,
-      worst has the smallest nonzero chance — matching Mitchell's "higher
-      fitness -> more chance, nonzero for all."
-    - Draw parents from this rank-weighted distribution (with replacement).
-  Why ranking over tournament: no k parameter to tune (tournament's k=3..7 is
-  folklore with no principled guideline), and it makes the probabilistic
-  mapping explicit. Runtime cost is negligible — one sort of 200 items per
-  generation is a rounding error next to fitness evaluation.
+  worst -825). Any selection that does ARITHMETIC on fitness must special-case the
+  negatives, and every such scheme we tried failed:
+    - Rank (linear): stable but caps a standout at ~2x the average — too weak;
+      genes accumulate too slowly and many seeds stall (6.3 diagnostics).
+    - Roulette, windowed (shift by fmin): a single -800 mutant inflates every
+      weight and collapses selection toward uniform.
+    - Roulette, clamped at 0: no pressure while the whole population is negative
+      (can't bootstrap) and it monopolises onto noise spikes -> fitness DRIFTS DOWN.
+  KEY INSIGHT: a genuine breakout and a noise fluke look identical to the selector,
+  so strong magnitude-proportional pull is inseparable from fragility to noise.
+  CHOSEN: Tournament selection.
+    - Each parent draw: pick k individuals uniformly at random (with replacement);
+      the highest-fitness of them wins. Default k = 3 (tunable via GAOptions).
+    - It only COMPARES fitnesses, so negatives need zero special handling, and a
+      lone noisy spike can never take over (its share is bounded by k, ~0.27 at
+      k=3 in a pop of 10). k is the pressure knob: k=1 uniform, k=2 ~ linear rank,
+      k=3+ stronger. Larger k shrinks the worst's chance toward (never exactly) 0.
+  The rank and roulette selectors were tried and then removed from the code
+  entirely; tournament is the only selector.
+  Runtime cost is negligible: O(k) per parent draw, no sort.
 
 [DECISION] D5  Elitism.
   The chapter does not carry the best individual forward unchanged. Default:
-  no elitism (match the book). Optionally keep the single best to stabilize.
+  no elitism (match the book). NOTE: "no elitism" does NOT remove the top scorer
+  from breeding — under D4 every member (the best included) is eligible as a
+  parent; elitism would merely also COPY the best into the next gen unchanged.
+  Optionally keep the single best to stabilize.
 
 [DECISION] D6  RandomMove direction sampling.
   Default: uniform over {North, South, East, West}.
@@ -257,6 +268,27 @@ These must be settled before/while coding. Defaults proposed; revisit as needed.
 
 [DECISION] D9  Tie-break for manual strategy M (multiple adjacent cans).
   Default: fixed priority North > South > East > West (see Section 7.1).
+
+[DECISION] D10  Common random numbers within a generation.   *** ADOPTED ***
+  Restatement of the idea: to score a generation, we draw ONE set of 100 random
+  grids and make EVERY individual clean that same set of 100 grids. The grids
+  still differ from each other (100 distinct random layouts) and a fresh set is
+  drawn for each new generation — but within a single generation, all individuals
+  face identical environments.
+  WHY: fitness from 100 random grids is a NOISY estimate (a strategy can look good
+  just by drawing easy layouts). When each individual is scored on its OWN grids,
+  that luck pollutes the comparison between them, so selection can't tell a
+  genuinely better strategy from a lucky one. With everyone on the SAME grids, the
+  luck is shared and cancels out of the comparison: score differences reflect real
+  skill. The 6.3 diagnostics showed the GA plateauing (best stuck ~54, diversity
+  intact) precisely because selection was noise-limited; grading everyone on the
+  same grids lifts that plateau (seeds that stalled at ~54 reach the 300s) at no
+  extra compute — it actually generates FEWER grids (100 per generation instead of
+  100 per individual).
+  Consistency with Section 6 [CHAPTER]: each individual's fitness is still the
+  average over 100 different random layouts; CRN only fixes WHICH 100, shared
+  across the generation. Implemented in core/eval generateGrids +
+  computeFitnessOnGrids, wired through core/ga evaluatePopulation.
 
 -------------------------------------------------------------------------------
 11. SUCCESS CRITERIA

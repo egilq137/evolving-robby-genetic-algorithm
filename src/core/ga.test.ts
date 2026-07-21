@@ -1,11 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { NUM_SITUATIONS } from "./situation";
-import { NUM_ACTIONS, STAY_PUT, MOVE_EAST } from "./actions";
+import { NUM_ACTIONS, STAY_PUT, MOVE_EAST, PICK_UP } from "./actions";
 import { randomStrategy, uniformStrategy, type Strategy } from "./strategy";
 import {
   randomPopulation,
-  rankOrder,
-  makeRankSelector,
+  makeTournamentSelector,
   crossover,
   mutate,
   evaluatePopulation,
@@ -54,52 +53,55 @@ describe("randomPopulation", () => {
   });
 });
 
-describe("rankOrder", () => {
-  it("orders indices worst -> best", () => {
-    expect(rankOrder([30, 10, 20])).toEqual([1, 2, 0]);
+describe("makeTournamentSelector", () => {
+  const shares = (fitnesses: number[], k: number, seed: number, draws = 100000) => {
+    const sel = makeTournamentSelector(fitnesses, makeRng(seed), k);
+    const counts = new Array(fitnesses.length).fill(0);
+    for (let i = 0; i < draws; i++) counts[sel()]++;
+    return counts.map((c) => c / draws);
+  };
+
+  it("k=1 is uniform (no selection pressure)", () => {
+    const s = shares([0, 1, 2, 3], 1, 5);
+    for (const p of s) expect(Math.abs(p - 0.25)).toBeLessThan(0.02);
   });
 
-  it("works with negative fitnesses (the D4 gotcha)", () => {
-    expect(rankOrder([-800, -100, -400])).toEqual([0, 2, 1]);
+  it("larger k => stronger pressure toward the best", () => {
+    const best = (k: number) => shares([0, 1, 2, 3], k, 5)[3];
+    expect(best(1)).toBeLessThan(best(2));
+    expect(best(2)).toBeLessThan(best(3));
+    expect(best(3)).toBeLessThan(best(5));
   });
 
-  it("returns a permutation of all indices", () => {
-    const order = rankOrder([5, 5, 1, 9, 3]);
-    expect([...order].sort((a, b) => a - b)).toEqual([0, 1, 2, 3, 4]);
-  });
-});
-
-describe("makeRankSelector - exact mapping with a controlled RNG", () => {
-  // 3 individuals -> total weight 6, cumulative [1,3,6].
-  // target = rng()*6: <1 -> rank1 (worst), [1,3) -> rank2, [3,6) -> rank3 (best).
-  it("maps rng draws to the right ranked individual", () => {
-    const sel = makeRankSelector([10, 20, 30], queueRng([0, 0.2, 0.9]));
-    expect(sel()).toBe(0); // worst (fitness 10)
-    expect(sel()).toBe(1); // middle
-    expect(sel()).toBe(2); // best (fitness 30)
+  it("handles NEGATIVE fitnesses with no special-casing (favors least-bad)", () => {
+    // Compares only, so the book's early -81/-825 range needs no shift/clamp.
+    const s = shares([-825, -400, -81], 3, 7);
+    expect(s[2]).toBeGreaterThan(s[1]); // -81 beats -400
+    expect(s[1]).toBeGreaterThan(s[0]); // -400 beats -825
+    expect(s[0]).toBeGreaterThan(0); // worst still occasionally wins
   });
 
-  it("selects by RANK not magnitude: same order + same seed => same picks", () => {
-    const draw = (fit: number[]) => {
-      const sel = makeRankSelector(fit, makeRng(7));
-      return Array.from({ length: 50 }, () => sel());
+  it("a lone spike CANNOT monopolize (bounded by k, unlike proportional)", () => {
+    // One individual at 1000 among nine 0s. Proportional selection would hand it
+    // ~99%; tournament k=3 caps it near (10^3 - 9^3)/10^3 = 0.271.
+    const s = shares([1000, 0, 0, 0, 0, 0, 0, 0, 0, 0], 3, 11);
+    expect(s[0]).toBeGreaterThan(0.2);
+    expect(s[0]).toBeLessThan(0.35);
+  });
+
+  it("defaults to k = 3", () => {
+    const seq = (sel: () => number) => Array.from({ length: 50 }, () => sel());
+    const dflt = seq(makeTournamentSelector([0, 1, 2, 3], makeRng(42)));
+    const explicit = seq(makeTournamentSelector([0, 1, 2, 3], makeRng(42), 3));
+    expect(dflt).toEqual(explicit);
+  });
+
+  it("is reproducible by seed", () => {
+    const draw = () => {
+      const sel = makeTournamentSelector([2, -3, 10, 0, 5], makeRng(123), 3);
+      return Array.from({ length: 40 }, () => sel());
     };
-    // Same ordering, wildly different magnitudes (incl. negatives).
-    expect(draw([10, 20, 30])).toEqual(draw([-800, -400, -100]));
-  });
-});
-
-describe("makeRankSelector - distribution", () => {
-  it("prefers higher ranks and gives every individual a nonzero chance", () => {
-    const fit = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]; // already worst..best
-    const sel = makeRankSelector(fit, makeRng(2024));
-    const counts = new Array(10).fill(0);
-    for (let i = 0; i < 20000; i++) counts[sel()]++;
-    expect(counts.every((c) => c > 0)).toBe(true); // even the worst is picked
-    expect(counts[9]).toBeGreaterThan(counts[0]); // best beats worst
-    expect(counts[9]).toBeGreaterThan(counts[4]); // and beats the middle
-    // Linear ranking: best (weight 10) vs worst (weight 1) ~ 10x more often.
-    expect(counts[9] / counts[0]).toBeGreaterThan(4);
+    expect(draw()).toEqual(draw());
   });
 });
 
@@ -217,6 +219,19 @@ describe("evaluatePopulation", () => {
     expect(evaluatePopulation(pop, makeRng(1), { numSessions: 10 })).toEqual([
       0, -955, 0,
     ]);
+  });
+
+  it("COMMON RANDOM NUMBERS: identical grid-dependent strategies score identically (D10)", () => {
+    // uniformStrategy(PICK_UP) never moves and never uses RandomMove, so its score
+    // depends only on whether site (0,0) has a can — i.e. on the GRID. Two copies at
+    // different positions must get the SAME fitness, proving the whole population is
+    // scored on one shared grid set (not each on its own draw).
+    const a = uniformStrategy(PICK_UP);
+    const b = uniformStrategy(PICK_UP);
+    const pop = [a, uniformStrategy(STAY_PUT), uniformStrategy(MOVE_EAST), b];
+    const fit = evaluatePopulation(pop, makeRng(1), { numSessions: 20 });
+    expect(fit[0]).toBe(fit[3]); // same grids -> same score despite different slots
+    expect(fit[0]).toBeLessThan(0); // and it genuinely depends on the grid
   });
 });
 

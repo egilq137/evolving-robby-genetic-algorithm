@@ -103,3 +103,45 @@ export function computeFitness(
   }
   return total / numSessions;
 }
+
+/**
+ * Generate `count` independent random grids — the SHARED grid set for one
+ * generation (common random numbers, spec D10). Each grid is a different random
+ * layout; the point is that the WHOLE population is later scored on this same set,
+ * so fitness comparisons within a generation reflect skill, not luck of the draw.
+ */
+export function generateGrids(
+  count: number,
+  rng: Rng,
+  opts: FitnessOptions = {},
+): Grid[] {
+  const rows = opts.rows ?? 10;
+  const cols = opts.cols ?? 10;
+  const canProb = opts.canProb ?? DEFAULT_CAN_PROB;
+  const grids: Grid[] = [];
+  for (let i = 0; i < count; i++) {
+    grids.push(placeCans(createGrid(rows, cols), canProb, rng));
+  }
+  return grids;
+}
+
+/**
+ * A strategy's fitness on a FIXED, pre-generated set of grids: the average session
+ * score over them. Each grid is cloned before use, so the shared originals are
+ * never mutated (cans one individual picks up don't affect the next). `rng` is
+ * consumed only by RandomMove. This is the per-individual half of common random
+ * numbers — see core/ga's evaluatePopulation.
+ */
+export function computeFitnessOnGrids(
+  strategy: Strategy,
+  grids: Grid[],
+  rng: Rng,
+  numActions: number = DEFAULT_ACTIONS_PER_SESSION,
+): number {
+  let total = 0;
+  for (const grid of grids) {
+    const clone: Grid = { rows: grid.rows, cols: grid.cols, cells: grid.cells.slice() };
+    total += runSession(strategy, clone, rng, numActions);
+  }
+  return total / grids.length;
+}

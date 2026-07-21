@@ -8,7 +8,13 @@ import {
 } from "./actions";
 import { uniformStrategy, type Strategy } from "./strategy";
 import { encodeSituation } from "./situation";
-import { runSession, computeFitness, traceSession } from "./eval";
+import {
+  runSession,
+  computeFitness,
+  traceSession,
+  generateGrids,
+  computeFitnessOnGrids,
+} from "./eval";
 import { makeRng } from "./rng";
 
 const rng = () => 0; // deterministic stand-in; unused by non-random strategies
@@ -149,5 +155,40 @@ describe("computeFitness - reproducibility", () => {
     const a = computeFitness(strat, makeRng(1), { numSessions: 30 });
     const b = computeFitness(strat, makeRng(2), { numSessions: 30 });
     expect(a).not.toBe(b);
+  });
+});
+
+describe("generateGrids + computeFitnessOnGrids (common random numbers, D10)", () => {
+  it("generateGrids returns `count` grids, reproducible by seed", () => {
+    const a = generateGrids(5, makeRng(1));
+    const b = generateGrids(5, makeRng(1));
+    expect(a.length).toBe(5);
+    expect(a.map((g) => Array.from(g.cells))).toEqual(b.map((g) => Array.from(g.cells)));
+  });
+
+  it("the generated grids are not all identical to each other", () => {
+    const grids = generateGrids(5, makeRng(3));
+    const first = Array.from(grids[0].cells).join("");
+    expect(grids.some((g) => Array.from(g.cells).join("") !== first)).toBe(true);
+  });
+
+  it("scoring does NOT mutate the shared grids (each session gets a fresh clone)", () => {
+    const grids = generateGrids(4, makeRng(7));
+    const before = grids.map((g) => Array.from(g.cells));
+    computeFitnessOnGrids(uniformStrategy(PICK_UP), grids, rng, 200); // picks up cans
+    expect(grids.map((g) => Array.from(g.cells))).toEqual(before); // originals intact
+  });
+
+  it("equals the plain single-grid score, averaged (on a deterministic strategy)", () => {
+    // PickUp never moves/randoms, so its per-grid score is fully determined; the
+    // average over grids must match running each grid by hand via runSession.
+    const grids = generateGrids(4, makeRng(9));
+    const byHand =
+      grids.reduce(
+        (sum, g) =>
+          sum + runSession(uniformStrategy(PICK_UP), { rows: g.rows, cols: g.cols, cells: g.cells.slice() }, rng, 200),
+        0,
+      ) / grids.length;
+    expect(computeFitnessOnGrids(uniformStrategy(PICK_UP), grids, rng, 200)).toBe(byHand);
   });
 });

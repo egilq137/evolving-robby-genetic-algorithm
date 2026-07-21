@@ -2,7 +2,9 @@
 //
 // This file holds the pieces that MAKE a new generation from an old one:
 //   - randomPopulation: the initial pool of random strategies
-//   - rankOrder + makeRankSelector: rank-based parent selection (spec D4)
+//   - makeTournamentSelector: parent selection (spec D4). It only COMPARES
+//       fitnesses, so negatives need no special handling and a single noisy spike
+//       can never monopolise. Pressure is tuned by k (default 3).
 //   - crossover: single-point recombination of two parents (spec 8.3b / D7)
 //   - mutate: per-gene random replacement (spec 8.3c, rate = D3)
 //
@@ -10,7 +12,13 @@
 
 import { NUM_ACTIONS } from "./actions";
 import { randomStrategy, type Strategy } from "./strategy";
-import { computeFitness, type FitnessOptions } from "./eval";
+import {
+  generateGrids,
+  computeFitnessOnGrids,
+  DEFAULT_SESSIONS_PER_FITNESS,
+  DEFAULT_ACTIONS_PER_SESSION,
+  type FitnessOptions,
+} from "./eval";
 import type { Rng } from "./rng";
 
 /** An initial population of `size` random strategies. */
@@ -20,47 +28,35 @@ export function randomPopulation(size: number, rng: Rng): Strategy[] {
   return pop;
 }
 
-/**
- * Population indices sorted worst -> best by fitness. The result[0] is the
- * lowest-fitness individual (rank 1), result[n-1] is the highest (rank n).
- * Selection depends only on this ORDER, never on the raw fitness magnitudes,
- * which is what lets it cope with negative fitnesses (spec D4).
- */
-export function rankOrder(fitnesses: number[]): number[] {
-  return fitnesses
-    .map((_, i) => i)
-    .sort((a, b) => fitnesses[a] - fitnesses[b]);
-}
+export const DEFAULT_TOURNAMENT_K = 3;
 
 /**
- * Build a rank-based parent selector. Rank r (1 = worst .. n = best) is chosen
- * with probability proportional to r (linear ranking): the best individual is
- * n times as likely as the worst, and every individual has a nonzero chance.
- * Returns a function that draws one population index per call.
+ * Build a tournament parent selector (spec D4, the method the GA uses). Each draw
+ * picks `k` individuals uniformly at random (with replacement) and returns the one
+ * with the highest fitness — ties go to the first seen.
  *
- * Precomputes the cumulative weights once (O(n log n)) so each draw is O(log n).
+ * Why this over ranking/roulette: it only ever COMPARES fitnesses, never does
+ * arithmetic on them, so negative fitnesses need no shifting/clamping (the source
+ * of our earlier bugs), and a single noise-inflated individual can never take over
+ * (its share is bounded by k). `k` is the pressure knob: k = 1 is uniform (no
+ * selection), k = 2 ≈ linear ranking, k = 3+ pushes harder toward the top. Larger k
+ * shrinks the worst individual's chance toward (but never exactly) zero.
+ *
+ * O(k) per draw, no precomputation or sorting.
  */
-export function makeRankSelector(fitnesses: number[], rng: Rng): () => number {
-  const order = rankOrder(fitnesses); // worst..best
-  const n = order.length;
-  const cumulative = new Array<number>(n);
-  let acc = 0;
-  for (let i = 0; i < n; i++) {
-    acc += i + 1; // weight of rank (i+1)
-    cumulative[i] = acc;
-  }
-  const total = acc; // n(n+1)/2
+export function makeTournamentSelector(
+  fitnesses: number[],
+  rng: Rng,
+  k: number = DEFAULT_TOURNAMENT_K,
+): () => number {
+  const n = fitnesses.length;
   return () => {
-    const target = rng() * total;
-    // smallest i with cumulative[i] > target (binary search)
-    let lo = 0;
-    let hi = n - 1;
-    while (lo < hi) {
-      const mid = (lo + hi) >> 1;
-      if (cumulative[mid] > target) hi = mid;
-      else lo = mid + 1;
+    let best = Math.floor(rng() * n);
+    for (let j = 1; j < k; j++) {
+      const challenger = Math.floor(rng() * n);
+      if (fitnesses[challenger] > fitnesses[best]) best = challenger;
     }
-    return order[lo];
+    return best;
   };
 }
 
@@ -105,27 +101,42 @@ export function mutate(strategy: Strategy, mutationRate: number, rng: Rng): void
 export const DEFAULT_POPULATION_SIZE = 200;
 export const DEFAULT_MUTATION_RATE = 0.005; // spec D3
 
-/** Fitness of every individual in the population (spec step 2). */
+/**
+ * Fitness of every individual in the population (spec step 2), using COMMON RANDOM
+ * NUMBERS (spec D10): one set of grids is generated ONCE for the whole generation,
+ * and every individual is scored on that SAME set. Fitness differences therefore
+ * reflect skill, not which grids each individual happened to draw — the noise-free
+ * comparison that lets tournament selection resolve small real improvements. A
+ * fresh grid set is drawn each generation (the shared `rng` advances), so the
+ * population still faces varied environments over the run. `rng` is also used for
+ * RandomMove during the sessions.
+ */
 export function evaluatePopulation(
   population: Strategy[],
   rng: Rng,
   opts?: FitnessOptions,
 ): number[] {
-  return population.map((s) => computeFitness(s, rng, opts));
+  const numSessions = opts?.numSessions ?? DEFAULT_SESSIONS_PER_FITNESS;
+  const numActions = opts?.numActions ?? DEFAULT_ACTIONS_PER_SESSION;
+  const grids = generateGrids(numSessions, rng, opts); // shared across the population
+  return population.map((s) => computeFitnessOnGrids(s, grids, rng, numActions));
 }
 
 /**
  * Build the next generation from the current one and its fitnesses (spec step 3):
- * repeatedly pick two parents by rank, cross them over, mutate the children, and
- * add both, until the new population is the same size as the old.
+ * repeatedly pick two parents by tournament selection (size `tournamentK`), cross
+ * them over, mutate the children, and add both, until the new population is the
+ * same size as the old. Every member of the current generation is eligible to be
+ * a parent (see makeTournamentSelector).
  */
 export function nextGeneration(
   population: Strategy[],
   fitnesses: number[],
   mutationRate: number,
   rng: Rng,
+  tournamentK: number = DEFAULT_TOURNAMENT_K,
 ): Strategy[] {
-  const selector = makeRankSelector(fitnesses, rng);
+  const selector = makeTournamentSelector(fitnesses, rng, tournamentK);
   const size = population.length;
   const next: Strategy[] = [];
   while (next.length < size) {
@@ -143,6 +154,7 @@ export function nextGeneration(
 export interface GAOptions extends FitnessOptions {
   populationSize?: number;
   mutationRate?: number;
+  tournamentK?: number;
 }
 
 export interface GenerationStats {
@@ -177,6 +189,7 @@ export function runGA(
 ): EvolutionRun {
   const populationSize = opts.populationSize ?? DEFAULT_POPULATION_SIZE;
   const mutationRate = opts.mutationRate ?? DEFAULT_MUTATION_RATE;
+  const tournamentK = opts.tournamentK ?? DEFAULT_TOURNAMENT_K;
 
   let population = randomPopulation(populationSize, rng);
   const history: GenerationStats[] = [];
@@ -192,7 +205,7 @@ export function runGA(
       bestFitness = fitnesses[bi];
       bestStrategy = population[bi].slice(); // keep a copy before the pop changes
     }
-    population = nextGeneration(population, fitnesses, mutationRate, rng);
+    population = nextGeneration(population, fitnesses, mutationRate, rng, tournamentK);
   }
   return { history, bestStrategy, bestFitness };
 }
