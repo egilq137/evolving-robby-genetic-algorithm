@@ -306,16 +306,27 @@ function renderPlot(): void {
   ctx.fillText("● population average", W - padR - 120, padT + 26);
 }
 
+let advancedMetrics = false;
+
 function renderStats(): void {
   const latest = history[history.length - 1];
-  const distinct = distinctCount(population);
-  const ham = meanHamming(population, metricRng);
-  const pick = pickUpGeneScore(champion);
   $("stats").innerHTML =
     `<b>generation ${generation}</b>` +
     ` &nbsp; best <b>${latest.best.toFixed(0)}</b>` +
     ` &nbsp; avg ${latest.avg.toFixed(0)}` +
-    ` &nbsp; best-ever <b>${bestEverFitness.toFixed(0)}</b> (gen ${bestEverGen})<br>` +
+    ` &nbsp; best-ever <b>${bestEverFitness.toFixed(0)}</b> (gen ${bestEverGen})`;
+  renderAdvancedStats();
+}
+
+/** The opt-in diagnostic line: only computed and shown when the user asks for it. */
+function renderAdvancedStats(): void {
+  const box = $("advancedStats");
+  box.style.display = advancedMetrics ? "block" : "none";
+  if (!advancedMetrics) return;
+  const distinct = distinctCount(population);
+  const ham = meanHamming(population, metricRng);
+  const pick = pickUpGeneScore(champion);
+  box.innerHTML =
     `<span class="dim">diversity:</span> ${distinct}/${popSize} distinct genomes,` +
     ` mean pairwise difference ${(ham * 100).toFixed(0)}% of genes` +
     ` &nbsp;·&nbsp; <span class="dim">champion's “pick up the can” genes:</span> ` +
@@ -489,16 +500,12 @@ function renderTrace(): void {
   drawScore();
   updateGenomeHighlight();
   const cum = step === 0 ? 0 : trace[step - 1].cumulative;
-  const last =
-    step === 0
-      ? "(start)"
-      : `${ACTION_NAMES[trace[step - 1].action]} → ${trace[step - 1].reward >= 0 ? "+" : ""}${trace[step - 1].reward}`;
   let name = TRACE_STRATEGIES[traceIndex].name;
   if (name === RANDOM_STRAT) name += ` #${randomStratSeed}`;
   if (name === CHAMPION) name += ` — gen ${generation}, fit ${championFitness.toFixed(0)}`;
   if (name === BEST_EVER) name += ` — gen ${bestEverGen}, fit ${bestEverFitness.toFixed(0)}`;
   $("traceReadout").innerHTML =
-    `${name}<br>step ${step} / ${STEPS} &nbsp; <strong>score ${cum}</strong> &nbsp; last: ${last}`;
+    `${name}<br>step ${step} / ${STEPS} &nbsp; <strong>score ${cum}</strong>`;
   document.querySelectorAll("#traceButtons button").forEach((b, i) => {
     b.classList.toggle("active", i === traceIndex);
   });
@@ -603,6 +610,13 @@ function setup(): void {
     }
   });
 
+  // advanced-metrics toggle (progressive disclosure of the diagnostic line)
+  const advToggle = $("advancedToggle") as HTMLInputElement;
+  advToggle.addEventListener("change", () => {
+    advancedMetrics = advToggle.checked;
+    renderAdvancedStats();
+  });
+
   // evolution controls
   $("evolve100").addEventListener("click", () => evolveBy(100));
   $("runPause").addEventListener("click", toggleRun);
@@ -610,9 +624,18 @@ function setup(): void {
     readTunables();
     resetRun(Math.floor(Math.random() * 1e6));
   });
-  $("apply").addEventListener("click", () => {
+  const applyBtn = $("apply") as HTMLButtonElement;
+  let applyFeedbackTimer: number | undefined;
+  applyBtn.addEventListener("click", () => {
     readTunables();
     resetRun(1);
+    // Feedback: acknowledge that the settings were applied and evolution restarted.
+    if (applyFeedbackTimer !== undefined) clearTimeout(applyFeedbackTimer);
+    applyBtn.textContent = "✓ Applied";
+    applyFeedbackTimer = window.setTimeout(() => {
+      applyBtn.textContent = "Apply settings";
+      applyFeedbackTimer = undefined;
+    }, 1300);
   });
 
   // trace controls

@@ -46,17 +46,11 @@
       /* two-column teaching layout: stage (left) + sidebar (right) */
       .layout {
         display: grid;
-        grid-template-columns: minmax(0, 1fr) 322px;
+        grid-template-columns: minmax(0, 1fr) 300px;
         gap: 1.5rem;
         align-items: start;
         margin-top: 1.5rem;
       }
-      @media (max-width: 900px) {
-        .layout {
-          grid-template-columns: 1fr;
-        }
-      }
-
       .stage {
         display: flex;
         flex-direction: column;
@@ -67,6 +61,32 @@
         display: flex;
         flex-direction: column;
         gap: 1.5rem;
+      }
+      /* When there isn't room for two columns, stack everything into one — but
+         dissolve the stage/sidebar wrappers (display: contents) so all four cards
+         become direct items we can reorder. Settings then sits right under the
+         evolution panel instead of below the tall inspect panel. Placed after the
+         .stage/.sidebar base rules so display:contents wins on source order. */
+      @media (max-width: 760px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        .stage,
+        .sidebar {
+          display: contents;
+        }
+        .card--evolution {
+          order: 1;
+        }
+        .card--settings {
+          order: 2;
+        }
+        .card--inspect {
+          order: 3;
+        }
+        .card--explainer {
+          order: 4;
+        }
       }
 
       .card {
@@ -189,6 +209,7 @@
         font-family: ui-monospace, monospace;
         font-size: 0.85rem;
         margin-top: 0.5rem;
+        min-height: 3.4em; /* reserve room for the two-line readout so it never reflows */
       }
 
       /* presets */
@@ -276,12 +297,18 @@
         genetic algorithm teaches a memoryless robot to collect soda cans, from
         random rules to near-perfect play.
       </p>
+      <p class="intro" style="margin-top: 0.4rem; font-size: 0.9rem">
+        From the “Robby the Robot” example in Melanie Mitchell's book
+        <a href="https://academic.oup.com/book/51004" target="_blank" rel="noopener"
+          ><i>Complexity: A Guided Tour</i></a
+        >.
+      </p>
     </header>
 
     <main class="layout">
       <!-- LEFT: the simulations and their controls -->
       <div class="stage">
-        <section class="card">
+        <section class="card card--evolution">
           <h2>Live evolution — Figure 9.6</h2>
           <p class="sub">Best fitness in the population, generation by generation.</p>
 
@@ -289,11 +316,20 @@
             <button id="runPause" class="primary">▶ Play evolution</button>
             <button id="evolve100">+100 gens</button>
             <span style="flex: 1"></span>
-            <button id="reseed" title="new random run with the current presets">↻ New run</button>
-            <button id="apply" title="restart from seed 1 with the current presets">Apply presets</button>
+            <button id="reseed" title="new random run with the current settings">↻ New run</button>
           </div>
 
           <div id="stats" class="stats">initializing…</div>
+
+          <div class="row" style="margin: -0.4rem 0 0.9rem">
+            <label
+              style="display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.82rem; opacity: 0.85; cursor: pointer"
+            >
+              <input id="advancedToggle" type="checkbox" style="accent-color: var(--accent)" />
+              Advanced metrics
+            </label>
+          </div>
+          <div id="advancedStats" class="stats" style="display: none"></div>
 
           <div class="plot-wrap">
             <canvas id="plot" width="820" height="380"></canvas>
@@ -307,14 +343,13 @@
           </p>
         </section>
 
-        <section class="card">
+        <section class="card card--inspect">
           <h2>Inspect one strategy on one grid</h2>
           <p class="sub">Watch a chosen brain run a full 200-step cleaning session.</p>
 
-          <div class="row" id="traceButtons"></div>
-          <div class="row" style="margin-top: 0.5rem">
-            <button id="newGrid">New grid</button>
-            <button id="toggleGenome">Show genome</button>
+          <div class="row" style="align-items: baseline">
+            <span style="font-size: 0.82rem; opacity: 0.72; margin-right: 0.1rem">Strategy:</span>
+            <span class="row" id="traceButtons" style="gap: 0.45rem"></span>
           </div>
 
           <div class="row transport">
@@ -324,6 +359,8 @@
             <button id="resetTrace">⟲ Reset</button>
             <span class="mono" id="speedLabel" style="font-size: 0.8rem"></span>
             <input id="speed" type="range" min="1" max="60" value="20" />
+            <span style="flex: 1"></span>
+            <button id="toggleGenome">Show genome</button>
           </div>
 
           <div id="genomePanel" style="display: none; margin-top: 0.8rem">
@@ -342,7 +379,13 @@
 
           <div class="trace-panels">
             <div>
-              <h3>World</h3>
+              <div
+                class="row"
+                style="justify-content: space-between; align-items: baseline; margin-bottom: 0.4rem"
+              >
+                <h3 style="margin: 0">World</h3>
+                <button id="newGrid" title="scatter a fresh random layout of cans">New grid</button>
+              </div>
               <canvas id="world" width="300" height="300"></canvas>
               <div id="traceReadout"></div>
             </div>
@@ -356,20 +399,25 @@
 
       <!-- RIGHT: presets and the explainer -->
       <aside class="sidebar">
-        <section class="card">
-          <h2>Presets</h2>
-          <p class="sub">Applied when you start a New run or Apply presets.</p>
+        <section class="card card--settings">
+          <h2>Settings</h2>
+          <p class="sub">Change a value, then press Apply settings to restart evolution with it.</p>
           <label class="field">pop size <input id="popSize" type="number" value="200" min="10" step="10" /></label>
           <label class="field">sessions / fitness <input id="numSessions" type="number" value="100" min="1" step="10" /></label>
           <label class="field">mutation rate % <input id="mutationRate" type="number" value="0.5" min="0" step="0.1" /></label>
           <label class="field" title="How many random individuals compete for each parent slot. Higher = stronger pull toward the current best; 1 = no selection.">selection pressure <input id="tournamentK" type="number" value="3" min="1" step="1" /></label>
+          <div class="row" style="margin-top: 0.8rem">
+            <button id="apply" class="primary" title="restart from seed 1 with the current settings">
+              Apply settings
+            </button>
+          </div>
           <p class="caption">
             Lower sessions/fitness = faster but noisier selection — the tradeoff
             common random numbers was added to soften.
           </p>
         </section>
 
-        <section class="card explainer">
+        <section class="card explainer card--explainer">
           <h2>What is this?</h2>
           <p>
             Robby lives on a 10×10 grid littered with cans. He sees only his own
@@ -382,7 +430,7 @@
           <h3>How to use it</h3>
           <ol>
             <li>Press <b>Play evolution</b> (or <b>+100 gens</b>) and watch best fitness climb past M.</li>
-            <li>Pause any time; tweak the presets and hit <b>New run</b> to compare.</li>
+            <li>Change a value under <b>Settings</b> and press <b>Apply settings</b> to compare.</li>
             <li>Below, pick <b>Champion</b> and step through a session to see how the evolved robot behaves.</li>
           </ol>
 
