@@ -674,6 +674,18 @@ function setup(): void {
   });
   upd();
 
+  // Some browsers (Firefox especially) restore previously entered form values on
+  // reload, ignoring the HTML `value` attributes — and since the settings fields
+  // sit in different DOM positions, the restored numbers can land in the WRONG
+  // inputs (e.g. mutation rate showing 3, diversity exposure showing 0.5). Force
+  // each field back to its declared default so a reload always starts from
+  // Mitchell's defaults. `defaultValue` reflects the HTML attribute, which the
+  // browser never overwrites.
+  ["popSize", "numSessions", "mutationRate", "tournamentK"].forEach((id) => {
+    const el = $(id) as HTMLInputElement;
+    el.value = el.defaultValue;
+  });
+
   readTunables();
   resetRun(1);
   fitPlot();
