@@ -214,6 +214,7 @@
 
       /* presets */
       .field {
+        position: relative; /* anchor for the .help-bubble popover */
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -234,6 +235,56 @@
         color: inherit;
         font: inherit;
         text-align: right;
+      }
+      .field-name {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+      }
+
+      /* click-or-hover help affordance: a visible "?" that reveals an explanation */
+      .help {
+        position: static;
+        display: inline-flex;
+      }
+      .help-btn {
+        width: 1.15rem;
+        height: 1.15rem;
+        padding: 0;
+        border-radius: 50%;
+        font-size: 0.72rem;
+        font-weight: 700;
+        line-height: 1;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0.7;
+      }
+      .help-btn:hover:not(:disabled),
+      .help-btn:focus-visible {
+        opacity: 1;
+        border-color: var(--accent);
+      }
+      .help-bubble {
+        position: absolute;
+        z-index: 20;
+        top: calc(100% + 4px);
+        left: 0;
+        right: 0;
+        display: none;
+        padding: 0.6rem 0.7rem;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--panel-strong);
+        backdrop-filter: blur(6px);
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+        font-size: 0.8rem;
+        line-height: 1.45;
+        opacity: 0.95;
+      }
+      .help:hover .help-bubble,
+      .help:focus-within .help-bubble {
+        display: block;
       }
 
       .explainer h3 {
@@ -403,18 +454,48 @@
           <h2>Settings</h2>
           <p class="sub">Change a value, then press Apply settings to restart evolution with it.</p>
           <label class="field">pop size <input id="popSize" type="number" value="200" min="10" step="10" /></label>
-          <label class="field">sessions / fitness <input id="numSessions" type="number" value="100" min="1" step="10" /></label>
+          <div class="field">
+            <span class="field-name">
+              <label for="numSessions">diversity exposure</label>
+              <span class="help">
+                <button type="button" class="help-btn" aria-label="What is diversity exposure?">
+                  ?
+                </button>
+                <span class="help-bubble" role="tooltip">
+                  How many different random can layouts each genome is tested on before its
+                  fitness is computed (by averaging over them). More exposure evaluates slower
+                  but gives a more trustworthy measure of true generalization. Fewer evaluates
+                  faster, but the reported best fitness gets noisier and more optimistic — a
+                  genome can look great by getting lucky on a small sample rather than truly
+                  generalizing. Common random numbers keeps comparisons fair within a
+                  generation, but doesn't fix this across runs.
+                </span>
+              </span>
+            </span>
+            <input id="numSessions" type="number" value="100" min="1" step="10" />
+          </div>
           <label class="field">mutation rate % <input id="mutationRate" type="number" value="0.5" min="0" step="0.1" /></label>
-          <label class="field" title="How many random individuals compete for each parent slot. Higher = stronger pull toward the current best; 1 = no selection.">selection pressure <input id="tournamentK" type="number" value="3" min="1" step="1" /></label>
+          <div class="field">
+            <span class="field-name">
+              <label for="tournamentK">selection pressure</label>
+              <span class="help">
+                <button type="button" class="help-btn" aria-label="What is selection pressure?">
+                  ?
+                </button>
+                <span class="help-bubble" role="tooltip">
+                  How many random individuals compete for each parent slot. Higher = a stronger
+                  pull toward the current best (faster convergence, but more prone to getting
+                  stuck on an early winner); 1 = no selection at all, just random drift.
+                </span>
+              </span>
+            </span>
+            <input id="tournamentK" type="number" value="3" min="1" step="1" />
+          </div>
           <div class="row" style="margin-top: 0.8rem">
             <button id="apply" class="primary" title="restart from seed 1 with the current settings">
               Apply settings
             </button>
           </div>
-          <p class="caption">
-            Lower sessions/fitness = faster but noisier selection — the tradeoff
-            common random numbers was added to soften.
-          </p>
         </section>
 
         <section class="card explainer card--explainer">
